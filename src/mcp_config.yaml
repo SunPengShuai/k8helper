@@ -1,0 +1,125 @@
+services:
+  - name: kubernetes
+    type: provider
+    endpoints:
+      - name: list_pods
+        path: /api/v1/pods
+        method: GET
+      - name: get_pod_details
+        path: /api/v1/namespaces/{namespace}/pods/{name}
+        method: GET
+      - name: create_deployment
+        path: /apis/apps/v1/namespaces/{namespace}/deployments
+        method: POST
+      - name: list_deployments
+        path: /apis/apps/v1/namespaces/{namespace}/deployments
+        method: GET
+      - name: get_logs
+        path: /api/v1/namespaces/{namespace}/pods/{name}/log
+        method: GET
+      - name: list_services
+        path: /api/v1/namespaces/{namespace}/services
+        method: GET
+      - name: list_configmaps
+        path: /api/v1/namespaces/{namespace}/configmaps
+        method: GET
+      - name: list_secrets
+        path: /api/v1/namespaces/{namespace}/secrets
+        method: GET
+
+tools:
+  - name: pod_analyzer
+    description: 分析 Pod 状态和问题
+    input_schema:
+      type: object
+      properties:
+        pod_name:
+          type: string
+        namespace:
+          type: string
+    output_schema:
+      type: object
+      properties:
+        status:
+          type: string
+        issues:
+          type: array
+          items:
+            type: string
+        recommendations:
+          type: array
+          items:
+            type: string
+
+  - name: resource_creator
+    description: 创建 Kubernetes 资源
+    input_schema:
+      type: object
+      properties:
+        resource_type:
+          type: string
+        namespace:
+          type: string
+        manifest:
+          type: object
+    output_schema:
+      type: object
+      properties:
+        status:
+          type: string
+        resource_name:
+          type: string
+        message:
+          type: string
+
+  - name: cluster_analyzer
+    description: 分析集群状态和资源使用情况
+    input_schema:
+      type: object
+      properties:
+        namespace:
+          type: string
+    output_schema:
+      type: object
+      properties:
+        status:
+          type: string
+        resource_usage:
+          type: object
+        issues:
+          type: array
+          items:
+            type: string
+        recommendations:
+          type: array
+          items:
+            type: string
+
+  - name: log_analyzer
+    description: 分析 Pod 日志并识别问题
+    input_schema:
+      type: object
+      properties:
+        pod_name:
+          type: string
+        namespace:
+          type: string
+        time_range:
+          type: string
+    output_schema:
+      type: object
+      properties:
+        status:
+          type: string
+        errors:
+          type: array
+          items:
+            type: string
+        warnings:
+          type: array
+          items:
+            type: string
+        recommendations:
+          type: array
+          items:
+            type: string 

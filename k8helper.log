@@ -1,0 +1,19 @@
+2025-05-12 14:12:21,702 - src.utils.k8s_client - ERROR - 初始化Kubernetes客户端失败: Invalid kube-config file. No configuration found.
+2025-05-12 14:27:51,538 - src.utils.k8s_client - ERROR - 初始化Kubernetes客户端失败: Invalid kube-config file. No configuration found.
+2025-05-12 14:29:38,761 - src.core.agent - INFO - 分析用户意图: {'tool': 'pod_analyzer', 'parameters': {'pod_name': 'test-pod'}}
+2025-05-12 14:29:38,761 - src.core.agent - ERROR - 处理查询失败: 'NoneType' object has no attribute 'read_namespaced_pod'
+2025-05-12 14:30:11,544 - src.core.agent - INFO - 分析用户意图: {'tool': 'pod_analyzer', 'parameters': {'pod_name': 'test-pod'}}
+2025-05-12 14:30:11,544 - src.core.agent - ERROR - 处理查询失败: 'NoneType' object has no attribute 'read_namespaced_pod'
+2025-05-12 14:36:15,393 - src.core.agent - ERROR - 分析Pod失败: 'NoneType' object has no attribute 'read_namespaced_pod'
+2025-05-12 14:36:15,398 - src.core.agent - ERROR - 创建资源失败: 'NoneType' object has no attribute 'create_namespaced_deployment'
+2025-05-12 14:36:15,402 - src.core.agent - ERROR - 列出资源失败: 'NoneType' object has no attribute 'list_namespaced_pod'
+2025-05-12 14:36:15,406 - src.core.agent - INFO - 分析用户意图: {'tool': 'pod_analyzer', 'parameters': {'pod_name': 'test-pod'}}
+2025-05-12 14:36:15,407 - src.core.agent - ERROR - 分析Pod失败: 'NoneType' object has no attribute 'read_namespaced_pod'
+2025-05-12 14:39:24,811 - src.core.agent - INFO - 分析用户意图: {'tool': 'pod_analyzer', 'parameters': {'pod_name': 'test-pod'}}
+2025-05-12 14:39:24,811 - src.core.agent - ERROR - 处理查询失败: 'NoneType' object has no attribute 'read_namespaced_pod'
+2025-05-12 14:40:15,337 - src.core.agent - INFO - 分析用户意图: {'tool': 'pod_analyzer', 'parameters': {'pod_name': 'test-pod'}}
+2025-05-12 14:40:15,337 - src.core.agent - ERROR - 处理查询失败: 'NoneType' object has no attribute 'read_namespaced_pod'
+2025-05-12 14:42:24,995 - src.core.agent - INFO - 分析用户意图: {'tool': 'pod_analyzer', 'parameters': {'pod_name': 'test-pod'}}
+2025-05-12 14:42:51,750 - src.core.agent - INFO - 分析用户意图: {'tool': 'pod_analyzer', 'parameters': {'pod_name': 'test-pod'}}
+2025-05-12 19:03:33,549 - src.core.agent - INFO - 分析用户意图: {'tool': 'pod_analyzer', 'parameters': {'pod_name': 'test-pod'}}
+2025-05-12 19:03:40,511 - src.utils.k8s_client - ERROR - 初始化Kubernetes客户端失败: Service host/port is not set.

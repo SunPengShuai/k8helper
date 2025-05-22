@@ -1,0 +1,145 @@
+nohup: ignoring input
+INFO:     Will watch for changes in these directories: ['/data/workspace/k8helper']
+INFO:     Uvicorn running on http://0.0.0.0:8990 (Press CTRL+C to quit)
+INFO:     Started reloader process [1028971] using StatReload
+INFO:     Started server process [1028981]
+INFO:     Waiting for application startup.
+2025-05-13 14:55:51,639 - src.main - INFO - 配置验证通过
+INFO:     Application startup complete.
+2025-05-13 14:56:11,310 - src.core.llm_client - ERROR - 分析查询失败: Error code: 401 - {'error': {'id': '8ab711239716db1cd33ee53a429847e5', 'message': 'Incorrect API key provided: your_secret_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+2025-05-13 14:56:11,310 - src.api.routes - ERROR - 处理查询失败: 
+INFO:     127.0.0.1:47870 - "POST /api/v1/query HTTP/1.1" 500 Internal Server Error
+INFO:     10.46.86.95:54457 - "GET / HTTP/1.1" 200 OK
+INFO:     10.46.86.95:54457 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+2025-05-13 15:01:59,251 - src.core.llm_client - ERROR - 分析查询失败: Error code: 401 - {'error': {'id': '97b3dcec0ef52510bb83d63b11984445', 'message': 'Incorrect API key provided: your_secret_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+2025-05-13 15:01:59,251 - src.api.routes - ERROR - 处理查询失败: 
+INFO:     10.46.86.95:50190 - "POST /api/v1/query HTTP/1.1" 500 Internal Server Error
+WARNING:  StatReload detected changes in 'src/core/llm_client.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1028981]
+Process SpawnProcess-2:
+Traceback (most recent call last):
+  File "/usr/lib64/python3.11/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/usr/lib64/python3.11/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/data/home/paytonsun/.local/lib/python3.11/site-packages/uvicorn/_subprocess.py", line 76, in subprocess_started
+    target(sockets=sockets)
+  File "/data/home/paytonsun/.local/lib/python3.11/site-packages/uvicorn/server.py", line 61, in run
+    return asyncio.run(self.serve(sockets=sockets))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.11/asyncio/base_events.py", line 653, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/data/home/paytonsun/.local/lib/python3.11/site-packages/uvicorn/server.py", line 68, in serve
+    config.load()
+  File "/data/home/paytonsun/.local/lib/python3.11/site-packages/uvicorn/config.py", line 467, in load
+    self.loaded_app = import_from_string(self.app)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/home/paytonsun/.local/lib/python3.11/site-packages/uvicorn/importer.py", line 21, in import_from_string
+    module = importlib.import_module(module_str)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.11/importlib/__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 940, in exec_module
+  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+  File "/data/workspace/k8helper/src/main.py", line 7, in <module>
+    from .api.routes import router
+  File "/data/workspace/k8helper/src/api/routes.py", line 683
+    return {
+    ^^^^^^
+SyntaxError: expected 'except' or 'finally' block
+WARNING:  StatReload detected changes in 'src/api/routes.py'. Reloading...
+Process SpawnProcess-3:
+Traceback (most recent call last):
+  File "/usr/lib64/python3.11/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/usr/lib64/python3.11/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/data/home/paytonsun/.local/lib/python3.11/site-packages/uvicorn/_subprocess.py", line 76, in subprocess_started
+    target(sockets=sockets)
+  File "/data/home/paytonsun/.local/lib/python3.11/site-packages/uvicorn/server.py", line 61, in run
+    return asyncio.run(self.serve(sockets=sockets))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.11/asyncio/base_events.py", line 653, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/data/home/paytonsun/.local/lib/python3.11/site-packages/uvicorn/server.py", line 68, in serve
+    config.load()
+  File "/data/home/paytonsun/.local/lib/python3.11/site-packages/uvicorn/config.py", line 467, in load
+    self.loaded_app = import_from_string(self.app)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/home/paytonsun/.local/lib/python3.11/site-packages/uvicorn/importer.py", line 21, in import_from_string
+    module = importlib.import_module(module_str)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.11/importlib/__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 940, in exec_module
+  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+  File "/data/workspace/k8helper/src/main.py", line 7, in <module>
+    from .api.routes import router
+  File "/data/workspace/k8helper/src/api/routes.py", line 683
+    return {
+    ^^^^^^
+SyntaxError: expected 'except' or 'finally' block
+WARNING:  StatReload detected changes in 'src/core/llm_client.py'. Reloading...
+INFO:     Started server process [1037323]
+INFO:     Waiting for application startup.
+2025-05-13 15:03:50,407 - src.main - INFO - 配置验证通过
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'src/core/llm_client.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1037323]
+INFO:     Started server process [1039772]
+INFO:     Waiting for application startup.
+2025-05-13 15:06:25,092 - src.main - INFO - 配置验证通过
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'src/api/routes.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1039772]
+INFO:     Started server process [1040613]
+INFO:     Waiting for application startup.
+2025-05-13 15:07:29,268 - src.main - INFO - 配置验证通过
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'src/core/llm_client.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1040613]
+INFO:     Started server process [1052783]
+INFO:     Waiting for application startup.
+2025-05-13 15:21:58,125 - src.main - INFO - 配置验证通过
+INFO:     Application startup complete.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1052783]
+INFO:     Stopping reloader process [1028971]

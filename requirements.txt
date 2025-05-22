@@ -1,0 +1,11 @@
+fastapi==0.104.1
+uvicorn==0.24.0
+kubernetes==28.1.0
+pyyaml==6.0.1
+python-dotenv==1.0.0
+tencentcloud-sdk-python==3.0.1035
+tencentcloud-sdk-python-hunyuan==3.0.1377
+openai==1.78.1
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.1 

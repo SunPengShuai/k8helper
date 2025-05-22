@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  k8helper:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LOG_LEVEL=INFO
+      - KUBERNETES_NAMESPACE=default
+    volumes:
+      - ${KUBECONFIG:-~/.kube/config}:/root/.kube/config:ro
+    restart: unless-stopped 

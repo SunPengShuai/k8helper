@@ -1,0 +1,21 @@
+# 镜像配置
+image:
+  repository: k8helper
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# 调试模式
+debug: false
+
+# API配置
+api:
+  host: 0.0.0.0
+  port: 8080
+
+# 密钥配置
+secrets:
+  tencentSecretId: ""
+  tencentSecretKey: ""
+  hunyuanApiKey: ""
+  hunyuanSecretKey: ""
+  kubeConfig: "" 

@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8helper
+  labels:
+    app: k8helper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k8helper
+  template:
+    metadata:
+      labels:
+        app: k8helper
+    spec:
+      containers:
+      - name: k8helper
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DEBUG
+          value: {{ .Values.debug | quote }}
+        - name: API_HOST
+          value: {{ .Values.api.host | quote }}
+        - name: API_PORT
+          value: {{ .Values.api.port | quote }}
+        - name: TENCENT_SECRET_ID
+          valueFrom:
+            secretKeyRef:
+              name: k8helper-secrets
+              key: tencent-secret-id
+        - name: TENCENT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: k8helper-secrets
+              key: tencent-secret-key
+        - name: HUNYUAN_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: k8helper-secrets
+              key: hunyuan-api-key
+        - name: HUNYUAN_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: k8helper-secrets
+              key: hunyuan-secret-key
+        volumeMounts:
+        - name: kube-config
+          mountPath: /root/.kube
+          readOnly: true
+      volumes:
+      - name: kube-config
+        secret:
+          secretName: k8helper-kubeconfig 
