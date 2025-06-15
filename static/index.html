@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>K8Helper - 超强Kubernetes AI助手</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 K8Helper</h1>
+            <p>超强Kubernetes AI助手 - 支持任意kubectl命令</p>
+        </div>
+        
+        <!-- 选项卡导航 -->
+        <div class="tab-navigation">
+            <button class="tab-btn active" onclick="switchTab('query')">🔍 智能查询</button>
+            <button class="tab-btn" onclick="switchTab('security')">🔒 安全设置</button>
+        </div>
+        
+        <div class="main-content">
+            <!-- 查询选项卡内容 -->
+            <div id="query-tab" class="tab-content active">
+                <div class="query-section">
+                    <div class="query-form">
+                        <input type="text" id="query-input" class="query-input" 
+                               placeholder="输入任何Kubernetes相关问题，例如：查看所有Pod状态、获取节点信息、查看某个Pod的日志...">
+                        <button id="submit-btn" class="submit-btn">🔍 智能查询</button>
+                    </div>
+                    
+                    <div class="examples">
+                        <div class="example-card" onclick="setQuery('查看所有Pod的状态')">
+                            <div class="example-title">📋 查看Pod状态</div>
+                            <div class="example-desc">获取集群中所有Pod的运行状态</div>
+                        </div>
+                        <div class="example-card" onclick="setQuery('显示集群节点信息')">
+                            <div class="example-title">🖥️ 节点信息</div>
+                            <div class="example-desc">查看Kubernetes集群节点详情</div>
+                        </div>
+                        <div class="example-card" onclick="setQuery('获取所有服务列表')">
+                            <div class="example-title">🌐 服务列表</div>
+                            <div class="example-desc">显示集群中的所有服务</div>
+                        </div>
+                        <div class="example-card" onclick="setQuery('查看集群版本信息')">
+                            <div class="example-title">ℹ️ 版本信息</div>
+                            <div class="example-desc">获取Kubernetes集群版本</div>
+                        </div>
+                        <div class="example-card" onclick="setQuery('显示命名空间列表')">
+                            <div class="example-title">📁 命名空间</div>
+                            <div class="example-desc">查看所有可用的命名空间</div>
+                        </div>
+                        <div class="example-card" onclick="setQuery('获取集群事件')">
+                            <div class="example-title">📢 集群事件</div>
+                            <div class="example-desc">查看最近的集群事件</div>
+                        </div>
+                        <div class="example-card" onclick="setQuery('集群共有多少个pod？')">
+                            <div class="example-title">🔢 Pod统计</div>
+                            <div class="example-desc">统计集群中Pod的总数量</div>
+                        </div>
+                        <div class="example-card" onclick="setQuery('有多少个节点在运行？')">
+                            <div class="example-title">📊 节点统计</div>
+                            <div class="example-desc">统计集群中运行的节点数量</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="result-container" class="result-container">
+                    <div class="result-header">
+                        <div id="ai-analysis" class="ai-analysis" style="display: none;">
+                            <strong>🤖 AI分析：</strong>
+                            <div id="analysis-content"></div>
+                        </div>
+                        <div id="smart-reply" class="smart-reply" style="display: none;">
+                            <strong>💡 智能回复：</strong>
+                            <div id="smart-reply-content"></div>
+                        </div>
+                        <div id="command-info" class="command-info" style="display: none;">
+                            <strong>💻 执行命令：</strong>
+                            <div id="command-content"></div>
+                        </div>
+                    </div>
+                    <div class="result-content">
+                        <div id="result-content"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 安全设置选项卡内容 -->
+            <div id="security-tab" class="tab-content">
+                <div class="security-section">
+                    <div class="security-header">
+                        <h2>🔒 安全策略管理</h2>
+                        <p>自定义kubectl命令的安全策略，控制哪些操作被允许或禁止</p>
+                    </div>
+                    
+                    <!-- 超级管理员模式 -->
+                    <div class="security-card">
+                        <div class="security-card-header">
+                            <h3>⚡ 超级管理员模式</h3>
+                            <div class="super-admin-toggle">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="super-admin-toggle">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="super-admin-status">已禁用</span>
+                            </div>
+                        </div>
+                        <div class="security-card-content">
+                            <p class="warning-text">⚠️ 启用后将允许执行所有kubectl命令，包括删除、修改等危险操作。请谨慎使用！</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 自定义安全策略 -->
+                    <div class="security-card">
+                        <div class="security-card-header">
+                            <h3>🛡️ 自定义安全策略</h3>
+                            <button id="reset-config-btn" class="reset-btn">🔄 重置为默认</button>
+                        </div>
+                        <div class="security-card-content">
+                            <div class="config-section">
+                                <h4>🚫 额外危险命令</h4>
+                                <p class="config-desc">添加您认为危险的命令（除了默认的delete、patch、replace、edit）</p>
+                                <div class="tag-input-container">
+                                    <div id="dangerous-commands-tags" class="tags-container"></div>
+                                    <input type="text" id="dangerous-commands-input" class="tag-input" placeholder="输入命令名称，按回车添加">
+                                </div>
+                            </div>
+                            
+                            <div class="config-section">
+                                <h4>✅ 允许创建的资源</h4>
+                                <p class="config-desc">除了默认允许的资源，还可以创建哪些资源类型</p>
+                                <div class="tag-input-container">
+                                    <div id="safe-create-tags" class="tags-container"></div>
+                                    <input type="text" id="safe-create-input" class="tag-input" placeholder="输入资源类型，按回车添加">
+                                </div>
+                            </div>
+                            
+                            <div class="config-section">
+                                <h4>📝 允许Apply的资源</h4>
+                                <p class="config-desc">除了默认允许的资源，还可以apply哪些资源类型</p>
+                                <div class="tag-input-container">
+                                    <div id="safe-apply-tags" class="tags-container"></div>
+                                    <input type="text" id="safe-apply-input" class="tag-input" placeholder="输入资源类型，按回车添加">
+                                </div>
+                            </div>
+                            
+                            <div class="config-section">
+                                <h4>📏 允许扩缩容的资源</h4>
+                                <p class="config-desc">除了默认允许的资源，还可以扩缩容哪些资源类型</p>
+                                <div class="tag-input-container">
+                                    <div id="safe-scale-tags" class="tags-container"></div>
+                                    <input type="text" id="safe-scale-input" class="tag-input" placeholder="输入资源类型，按回车添加">
+                                </div>
+                            </div>
+                            
+                            <div class="config-actions">
+                                <button id="save-config-btn" class="save-btn">💾 保存配置</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 当前配置状态 -->
+                    <div class="security-card">
+                        <div class="security-card-header">
+                            <h3>📊 当前配置状态</h3>
+                            <button id="refresh-config-btn" class="refresh-btn">🔄 刷新</button>
+                        </div>
+                        <div class="security-card-content">
+                            <div id="current-config-display" class="config-display">
+                                <div class="loading">正在加载配置信息...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/js/app.js"></script>
+</body>
+</html> 
