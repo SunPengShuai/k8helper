@@ -287,7 +287,7 @@ function displayMultiStepResults(data) {
                 <div class="step-header" onclick="toggleStepDetails(${index})">
                     <div class="step-title">
                         <span class="step-icon">${statusIcon}</span>
-                        <span class="step-number">步骤 ${stepNumber}</span>
+                        <span class="step-number"> ${stepNumber}</span>
                         <span class="step-command">${escapeHtml(step.command)}</span>
                         ${retryBadge}
                     </div>

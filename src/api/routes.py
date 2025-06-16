@@ -8,6 +8,7 @@ import threading
 import shlex
 import yaml
 import os
+import asyncio
 from ..core.k8s_client import KubernetesClient
 from ..core.llm_client import SuperKubectlAgent
 from ..utils.logger import get_logger
@@ -15,6 +16,9 @@ from ..utils.config import Config
 
 logger = get_logger(__name__)
 router = APIRouter()
+
+# 获取项目根目录
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 安全配置管理
 class SecurityConfig:
@@ -204,7 +208,7 @@ class EnhancedKubectlExecutor:
         if command.startswith('kubectl '):
             return {
                 "type": "simple_kubectl",
-                "kubectl_command": command.replace('kubectl ', ''),
+                "kubectl_command": command,  # 保留完整的kubectl命令
                 "original_command": command
             }
         
@@ -223,7 +227,7 @@ class EnhancedKubectlExecutor:
             if first_word in known_kubectl_commands:
                 return {
                     "type": "simple_kubectl",
-                    "kubectl_command": command,
+                    "kubectl_command": f"kubectl {command}",  # 添加kubectl前缀
                     "original_command": f"kubectl {command}"
                 }
         
@@ -384,7 +388,13 @@ class EnhancedKubectlExecutor:
     @classmethod
     def _check_kubectl_safety(cls, kubectl_command: str) -> tuple[bool, str]:
         """检查kubectl命令安全性"""
-        command_lower = kubectl_command.lower().strip()
+        # 如果命令包含kubectl前缀，先移除它进行检查
+        if kubectl_command.startswith('kubectl '):
+            command_to_check = kubectl_command[8:]  # 移除 'kubectl ' 前缀
+        else:
+            command_to_check = kubectl_command
+            
+        command_lower = command_to_check.lower().strip()
         command_parts = command_lower.split()
         first_word = command_parts[0] if command_parts else ""
         
@@ -448,7 +458,7 @@ class EnhancedKubectlExecutor:
             
             # 检查每个管道命令
             if cmd.startswith('kubectl '):
-                is_safe, msg = cls._check_kubectl_safety(cmd.replace('kubectl ', ''))
+                is_safe, msg = cls._check_kubectl_safety(cmd)
             else:
                 # 检查是否是kubectl子命令
                 cmd_parts = cmd.split()
@@ -471,7 +481,7 @@ class EnhancedKubectlExecutor:
         # 检查子命令
         for i, sub_cmd in enumerate(command_info["sub_commands"]):
             if sub_cmd.startswith('kubectl '):
-                is_safe, msg = cls._check_kubectl_safety(sub_cmd.replace('kubectl ', ''))
+                is_safe, msg = cls._check_kubectl_safety(sub_cmd)
             else:
                 # 检查是否是kubectl子命令
                 cmd_parts = sub_cmd.split()
@@ -591,195 +601,169 @@ class EnhancedKubectlExecutor:
     @classmethod
     async def _execute_simple_kubectl(cls, command_info: Dict[str, Any], timeout: int) -> Dict[str, Any]:
         """执行简单kubectl命令"""
-        kubectl_command = command_info["kubectl_command"]
-        full_command = f"kubectl {kubectl_command}"
-        
         try:
-            cmd_args = shlex.split(full_command)
+            process = await asyncio.create_subprocess_shell(
+                command_info["kubectl_command"],
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=PROJECT_ROOT
+            )
+            stdout, stderr = await process.communicate()
+            return {
+                "success": process.returncode == 0,
+                "output": stdout.decode(),
+                "error": stderr.decode() if stderr else "",
+                "command": command_info["kubectl_command"],
+                "return_code": process.returncode,
+                "command_type": "simple_kubectl"
+            }
         except ValueError as e:
             return {
                 "success": False,
                 "error": f"命令格式错误: {str(e)}",
                 "output": "",
-                "command": full_command
+                "command": command_info["kubectl_command"]
             }
-        
-        logger.info(f"执行kubectl命令: {full_command}")
-        result = subprocess.run(
-            cmd_args,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd="/data/workspace"
-        )
-        
-        return {
-            "success": result.returncode == 0,
-            "output": result.stdout,
-            "error": result.stderr if result.stderr else "",
-            "command": full_command,
-            "return_code": result.returncode,
-            "command_type": "simple_kubectl"
-        }
     
     @classmethod
     async def _execute_pipeline(cls, command_info: Dict[str, Any], timeout: int) -> Dict[str, Any]:
         """执行管道命令"""
-        commands = command_info["commands"]
-        original_command = command_info["original_command"]
-        
-        logger.info(f"执行管道命令: {original_command}")
-        
-        # 使用shell执行管道命令
-        result = subprocess.run(
-            original_command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd="/data/workspace"
-        )
-        
-        return {
-            "success": result.returncode == 0,
-            "output": result.stdout,
-            "error": result.stderr if result.stderr else "",
-            "command": original_command,
-            "return_code": result.returncode,
-            "command_type": "pipeline",
-            "pipeline_commands": commands
-        }
+        try:
+            process = await asyncio.create_subprocess_shell(
+                " | ".join(command_info["commands"]),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=PROJECT_ROOT
+            )
+            stdout, stderr = await process.communicate()
+            return {
+                "success": process.returncode == 0,
+                "output": stdout.decode(),
+                "error": stderr.decode() if stderr else "",
+                "command": command_info["original_command"],
+                "return_code": process.returncode,
+                "command_type": "pipeline",
+                "pipeline_commands": command_info["commands"]
+            }
+        except ValueError as e:
+            return {
+                "success": False,
+                "error": f"命令格式错误: {str(e)}",
+                "output": "",
+                "command": command_info["original_command"]
+            }
     
     @classmethod
     async def _execute_command_substitution(cls, command_info: Dict[str, Any], timeout: int) -> Dict[str, Any]:
         """执行命令替换"""
-        original_command = command_info["original_command"]
-        
-        logger.info(f"执行命令替换: {original_command}")
-        
-        # 使用shell执行命令替换
-        result = subprocess.run(
-            original_command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd="/data/workspace"
-        )
-        
-        return {
-            "success": result.returncode == 0,
-            "output": result.stdout,
-            "error": result.stderr if result.stderr else "",
-            "command": original_command,
-            "return_code": result.returncode,
-            "command_type": "command_substitution",
-            "sub_commands": command_info["sub_commands"]
-        }
+        try:
+            process = await asyncio.create_subprocess_shell(
+                command_info["main_command"],
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=PROJECT_ROOT
+            )
+            stdout, stderr = await process.communicate()
+            return {
+                "success": process.returncode == 0,
+                "output": stdout.decode(),
+                "error": stderr.decode() if stderr else "",
+                "command": command_info["main_command"],
+                "return_code": process.returncode,
+                "command_type": "command_substitution",
+                "sub_commands": command_info["sub_commands"]
+            }
+        except ValueError as e:
+            return {
+                "success": False,
+                "error": f"命令格式错误: {str(e)}",
+                "output": "",
+                "command": command_info["main_command"]
+            }
     
     @classmethod
     async def _execute_logical_operators(cls, command_info: Dict[str, Any], timeout: int) -> Dict[str, Any]:
         """执行逻辑操作符命令"""
-        original_command = command_info["original_command"]
-        operator = command_info["operator"]
-        
-        logger.info(f"执行逻辑操作命令 ({operator}): {original_command}")
-        
-        # 使用shell执行逻辑操作
-        result = subprocess.run(
-            original_command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd="/data/workspace"
-        )
-        
-        return {
-            "success": result.returncode == 0,
-            "output": result.stdout,
-            "error": result.stderr if result.stderr else "",
-            "command": original_command,
-            "return_code": result.returncode,
-            "command_type": "logical_operators",
-            "operator": operator,
-            "commands": command_info["commands"]
-        }
+        try:
+            process = await asyncio.create_subprocess_shell(
+                " && ".join(command_info["commands"]),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=PROJECT_ROOT
+            )
+            stdout, stderr = await process.communicate()
+            return {
+                "success": process.returncode == 0,
+                "output": stdout.decode(),
+                "error": stderr.decode() if stderr else "",
+                "command": command_info["original_command"],
+                "return_code": process.returncode,
+                "command_type": "logical_operators",
+                "operator": command_info["operator"],
+                "commands": command_info["commands"]
+            }
+        except ValueError as e:
+            return {
+                "success": False,
+                "error": f"命令格式错误: {str(e)}",
+                "output": "",
+                "command": command_info["original_command"]
+            }
     
     @classmethod
     async def _execute_heredoc(cls, command_info: Dict[str, Any], timeout: int) -> Dict[str, Any]:
         """执行heredoc命令"""
-        kubectl_command = command_info["kubectl_command"]
-        yaml_content = command_info["yaml_content"]
-        
         try:
-            import tempfile
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_file:
-                temp_file.write(yaml_content)
-                temp_file_path = temp_file.name
-            
-            try:
-                full_command = f"kubectl {kubectl_command.replace('-f -', f'-f {temp_file_path}')}"
-                cmd_args = shlex.split(full_command)
-                
-                logger.info(f"执行heredoc命令: {full_command}")
-                result = subprocess.run(
-                    cmd_args,
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout,
-                    cwd="/data/workspace"
-                )
-                
-                return {
-                    "success": result.returncode == 0,
-                    "output": result.stdout,
-                    "error": result.stderr if result.stderr else "",
-                    "command": full_command,
-                    "return_code": result.returncode,
-                    "command_type": "heredoc",
-                    "yaml_content": yaml_content
-                }
-                
-            finally:
-                try:
-                    os.unlink(temp_file_path)
-                except:
-                    pass
-                    
-        except Exception as e:
+            process = await asyncio.create_subprocess_shell(
+                command_info["kubectl_command"],
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=PROJECT_ROOT
+            )
+            stdout, stderr = await process.communicate()
+            return {
+                "success": process.returncode == 0,
+                "output": stdout.decode(),
+                "error": stderr.decode() if stderr else "",
+                "command": command_info["kubectl_command"],
+                "return_code": process.returncode,
+                "command_type": "heredoc",
+                "yaml_content": command_info["yaml_content"]
+            }
+        except ValueError as e:
             return {
                 "success": False,
-                "error": f"执行heredoc失败: {str(e)}",
+                "error": f"命令格式错误: {str(e)}",
                 "output": "",
-                "command": f"kubectl {kubectl_command}",
-                "command_type": "heredoc"
+                "command": command_info["kubectl_command"]
             }
     
     @classmethod
     async def _execute_shell_command(cls, command_info: Dict[str, Any], timeout: int) -> Dict[str, Any]:
         """执行shell命令"""
-        shell_command = command_info["shell_command"]
-        
-        logger.info(f"执行shell命令: {shell_command}")
-        
-        result = subprocess.run(
-            shell_command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd="/data/workspace"
-        )
-        
-        return {
-            "success": result.returncode == 0,
-            "output": result.stdout,
-            "error": result.stderr if result.stderr else "",
-            "command": shell_command,
-            "return_code": result.returncode,
-            "command_type": "shell_command"
-        }
+        try:
+            process = await asyncio.create_subprocess_shell(
+                command_info["shell_command"],
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=PROJECT_ROOT
+            )
+            stdout, stderr = await process.communicate()
+            return {
+                "success": process.returncode == 0,
+                "output": stdout.decode(),
+                "error": stderr.decode() if stderr else "",
+                "command": command_info["shell_command"],
+                "return_code": process.returncode,
+                "command_type": "shell_command"
+            }
+        except ValueError as e:
+            return {
+                "success": False,
+                "error": f"命令格式错误: {str(e)}",
+                "output": "",
+                "command": command_info["shell_command"]
+            }
 
 # 为了向后兼容，保留原来的KubectlExecutor类
 class KubectlExecutor(EnhancedKubectlExecutor):
@@ -1101,16 +1085,18 @@ async def process_query(request: QueryRequest):
                         "command": current_command,
                         "result": exec_result
                     })
-                    
+                    # 记录原始命令和修正命令
+                    if retry_count == 0:
+                        original_command = current_command
+                        fixed_command = None
+                    else:
+                        fixed_command = current_command
                     if exec_result["success"]:
                         exec_success = True
                     else:
-                        # 单步命令失败，尝试智能重试
                         if retry_enabled and retry_count < max_retries:
                             logger.warning(f"单步命令第 {retry_count + 1} 次尝试失败: {exec_result['error']}")
-                            
                             try:
-                                # 让AI分析错误并生成修复命令
                                 retry_analysis = await ai_agent.analyze_error_and_retry(
                                     original_query=request.query,
                                     failed_command=current_command,
@@ -1118,31 +1104,42 @@ async def process_query(request: QueryRequest):
                                     step_number=1,
                                     execution_history=execution_history
                                 )
-                                
                                 if retry_analysis.get("success") and retry_analysis.get("retry_command"):
-                                    current_command = retry_analysis["retry_command"]
-                                    logger.info(f"AI建议重试命令: {current_command}")
+                                    # 记录修正命令
+                                    if retry_count == 0:
+                                        original_command = current_command
+                                    fixed_command = retry_analysis["retry_command"]
+                                    logger.info(f"AI建议重试命令: {fixed_command}")
                                     logger.info(f"重试原因: {retry_analysis.get('retry_reason', '未知')}")
+                                    current_command = fixed_command
+                                    retry_reason = retry_analysis.get('retry_reason', '')
                                     retry_count += 1
                                     continue
                                 else:
                                     logger.warning(f"AI无法生成重试命令: {retry_analysis.get('error', '未知错误')}")
                                     break
-                                    
                             except Exception as e:
                                 logger.error(f"智能重试分析失败: {str(e)}")
                                 break
                         else:
                             break
-        
-        # 格式化输出
+                # 格式化输出
                 if exec_success:
                     formatted_result = OutputFormatter.format_output(
-                        exec_result["command"], 
-                        exec_result["output"], 
+                        exec_result["command"],
+                        exec_result["output"],
                         output_format
                     )
-                    
+                    # 增加修正信息
+                    if 'fixed_command' in locals() and fixed_command and fixed_command != original_command:
+                        formatted_result["original_command"] = original_command
+                        formatted_result["fixed_command"] = fixed_command
+                        formatted_result["fix_tip"] = f"⚠️ 命令已自动修正为：{fixed_command}"
+                        if retry_reason:
+                            formatted_result["fix_reason"] = retry_reason
+                        # 在内容前加修正提示
+                        if formatted_result.get("content"):
+                            formatted_result["content"] = f"⚠️ 命令已自动修正为：{fixed_command}\n" + formatted_result["content"]
                     # 生成智能回复
                     try:
                         smart_reply = await ai_agent.generate_smart_reply(
@@ -1151,16 +1148,12 @@ async def process_query(request: QueryRequest):
                             exec_result["output"],
                             formatted_result
                         )
-                        
-                        # 如果有重试，添加重试信息
                         if retry_count > 0:
                             smart_reply += f"\n\n💡 注意：此命令经过 {retry_count} 次智能重试后成功执行。"
-                            
                     except Exception as e:
                         logger.warning(f"生成智能回复失败: {str(e)}")
                         retry_info = f"（经过 {retry_count} 次重试）" if retry_count > 0 else ""
                         smart_reply = f"命令执行成功{retry_info}，请查看详细结果。"
-                    
                 else:
                     formatted_result = {
                         "type": "error",

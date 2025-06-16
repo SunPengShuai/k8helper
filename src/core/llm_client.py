@@ -99,7 +99,7 @@ class SuperKubectlAgent:
                     "success": True,
                     "tool_name": "kubectl_command",
                     "parameters": {
-                        "command": "get pods --all-namespaces",
+                        "command": "kubectl get pods --all-namespaces -o wide",
                         "output_format": "table"
                     },
                     "analysis": "LLM服务不可用，返回默认命令"
@@ -147,7 +147,7 @@ class SuperKubectlAgent:
 {{
     "tool_name": "kubectl_command", 
     "parameters": {{
-        "command": "get pods --all-namespaces -o wide",
+        "command": "kubectl get pods --all-namespaces -o wide",
         "output_format": "table",
         "explanation": "获取所有命名空间中Pod的详细状态信息"
     }},
@@ -160,12 +160,12 @@ class SuperKubectlAgent:
 {{
     "tool_name": "kubectl_command",
     "parameters": {{
-        "command": "get ns -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete ns",
+        "command": "kubectl get namespace -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete namespace",
         "output_format": "text",
         "explanation": "批量删除所有以'a'开头的命名空间",
         "steps": [
-            "get ns -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete ns",
-            "get ns | grep '^a'"
+            "kubectl get namespace -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete namespace",
+            "kubectl get namespace | grep '^a'"
         ]
     }},
     "analysis": "用户需要批量删除所有以'a'开头的命名空间，使用shell管道命令获取符合条件的命名空间并批量删除，最后验证删除结果。"
@@ -177,12 +177,12 @@ class SuperKubectlAgent:
 {{
     "tool_name": "kubectl_command",
     "parameters": {{
-        "command": "create namespace test",
+        "command": "kubectl create namespace test",
         "output_format": "text",
         "explanation": "第一步：创建名为test的命名空间",
         "steps": [
-            "create namespace test",
-            "create deployment nginx-deployment --image=nginx:latest --namespace=test"
+            "kubectl create namespace test",
+            "kubectl create deployment nginx-deployment --image=nginx:latest --namespace=test"
         ]
     }},
     "analysis": "用户需要执行两步操作：1) 创建命名空间 2) 在该命名空间中创建nginx部署。建议分步执行以确保每步都成功。"
@@ -190,7 +190,7 @@ class SuperKubectlAgent:
 
 重要提醒：
 - 只返回JSON，不要包含任何其他文字
-- 命令中不要包含"kubectl"前缀
+- 命令中必须包含"kubectl"前缀
 - **准确识别删除意图**：如果用户说"删除"、"移除"等，必须生成删除命令
 - **支持shell语法**：可以使用管道、grep、xargs等来实现复杂操作
 - 如果是危险操作，在explanation中给出警告
@@ -308,12 +308,12 @@ class SuperKubectlAgent:
                         "success": True,
                         "tool_name": "kubectl_command",
                         "parameters": {
-                            "command": "get ns -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete ns",
+                            "command": "kubectl get namespace -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete namespace",
                             "output_format": "text",
                             "explanation": "批量删除所有以'a'开头的命名空间",
                             "steps": [
-                                "get ns -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete ns",
-                                "get ns | grep '^a'"
+                                "kubectl get namespace -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete namespace",
+                                "kubectl get namespace | grep '^a'"
                             ]
                         },
                         "analysis": "用户需要批量删除所有以'a'开头的命名空间，使用shell管道命令获取符合条件的命名空间并批量删除，最后验证删除结果"
@@ -323,7 +323,7 @@ class SuperKubectlAgent:
                         "success": True,
                         "tool_name": "kubectl_command",
                         "parameters": {
-                            "command": "delete namespace",
+                            "command": "kubectl delete namespace",
                             "output_format": "text",
                             "explanation": "删除命名空间（需要指定具体的命名空间名称）"
                         },
@@ -334,7 +334,7 @@ class SuperKubectlAgent:
                     "success": True,
                     "tool_name": "kubectl_command",
                     "parameters": {
-                        "command": "delete pod --all --all-namespaces",
+                        "command": "kubectl delete pod --all --all-namespaces",
                         "output_format": "text",
                         "explanation": "删除所有Pod"
                     },
@@ -345,7 +345,7 @@ class SuperKubectlAgent:
                     "success": True,
                     "tool_name": "kubectl_command",
                     "parameters": {
-                        "command": "get all --all-namespaces",
+                        "command": "kubectl get all --all-namespaces",
                         "output_format": "table",
                         "explanation": "先查看所有资源，然后确定要删除的具体资源"
                     },
@@ -354,27 +354,27 @@ class SuperKubectlAgent:
         
         # 非删除操作的关键词映射
         keyword_commands = {
-            "pod": "get pods --all-namespaces -o wide",
-            "deployment": "get deployments --all-namespaces",
-            "service": "get services --all-namespaces",
-            "node": "get nodes -o wide", 
-            "namespace": "get namespaces",
-            "命名空间": "get namespaces",
-            "日志": "logs",
-            "log": "logs",
-            "describe": "describe",
-            "详情": "describe",
-            "状态": "get pods --all-namespaces",
-            "集群": "cluster-info",
-            "版本": "version",
-            "事件": "get events --all-namespaces",
-            "配置": "get configmaps --all-namespaces"
+            "pod": "kubectl get pods --all-namespaces -o wide",
+            "deployment": "kubectl get deployments --all-namespaces",
+            "service": "kubectl get services --all-namespaces",
+            "node": "kubectl get nodes -o wide", 
+            "namespace": "kubectl get namespace",
+            "命名空间": "kubectl get namespace",
+            "日志": "kubectl logs",
+            "log": "kubectl logs",
+            "describe": "kubectl describe",
+            "详情": "kubectl describe",
+            "状态": "kubectl get pods --all-namespaces",
+            "集群": "kubectl cluster-info",
+            "版本": "kubectl version",
+            "事件": "kubectl get events --all-namespaces",
+            "配置": "kubectl get configmaps --all-namespaces"
         }
         
         # 查找匹配的关键词
         for keyword, command in keyword_commands.items():
             if keyword in query_lower:
-                output_format = "table" if command.startswith("get") else "text"
+                output_format = "table" if command.startswith("kubectl") else "text"
                 return {
                     "success": True,
                     "tool_name": "kubectl_command",
@@ -391,7 +391,7 @@ class SuperKubectlAgent:
             "success": True,
             "tool_name": "kubectl_command",
             "parameters": {
-                "command": "get pods --all-namespaces",
+                "command": "kubectl get pods --all-namespaces",
                 "output_format": "table",
                 "explanation": "默认命令：查看所有Pod状态"
             },
@@ -587,7 +587,6 @@ class SuperKubectlAgent:
 
 其他重要规则：
 - 只返回JSON，不要包含任何其他文字
-- retry_command中不要包含"kubectl"前缀
 - **支持shell语法**：可以使用管道（|）、xargs、grep等来实现复杂操作
 - 优先使用可执行的命令，不要只给建议
 - 如果是权限问题，不要建议提升权限，而是建议使用允许的操作
@@ -597,7 +596,7 @@ class SuperKubectlAgent:
 {
     "success": true/false,
     "can_retry": true/false,
-    "retry_command": "修复后的kubectl命令（不包含kubectl前缀，可以包含shell语法）",
+    "retry_command": "修复后的命令",
     "retry_reason": "为什么这样修复的原因",
     "error_analysis": "对错误的详细分析",
     "confidence": "high/medium/low - 修复成功的信心程度"
@@ -613,12 +612,12 @@ class SuperKubectlAgent:
 
 示例1 - 命名空间不存在（创建依赖）：
 错误: "namespaces \"test\" not found"
-失败命令: "create deployment nginx --image=nginx --namespace=test"
+失败命令: "kubectl create deployment nginx --image=nginx --namespace=test"
 正确返回:
 {
     "success": true,
     "can_retry": true,
-    "retry_command": "create namespace test",
+    "retry_command": "kubectl create namespace test",
     "retry_reason": "需要先创建命名空间test，然后再创建deployment",
     "error_analysis": "命名空间test不存在，需要先创建",
     "confidence": "high"
@@ -626,12 +625,12 @@ class SuperKubectlAgent:
 
 示例2 - 资源已存在：
 错误: "namespaces \"default\" already exists"
-失败命令: "create namespace default"
+失败命令: "kubectl create namespace default"
 正确返回:
 {
     "success": true,
     "can_retry": true,
-    "retry_command": "get namespace default",
+    "retry_command": "kubectl get namespace default",
     "retry_reason": "命名空间已存在，改为查看现有命名空间",
     "error_analysis": "命名空间default已经存在",
     "confidence": "high"
@@ -639,12 +638,12 @@ class SuperKubectlAgent:
 
 示例3 - 批量删除语法错误（使用shell语法修复）：
 错误: "error: there is no need to specify a resource type as a separate argument when passing arguments in resource/name form"
-失败命令: "get namespaces -o name | grep '^namespace/a' | xargs kubectl delete"
+失败命令: "kubectl get namespaces -o name | grep '^namespace/a' | xargs kubectl delete"
 正确返回:
 {
     "success": true,
     "can_retry": true,
-    "retry_command": "get ns -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete ns",
+    "retry_command": "kubectl get namespace -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete namespace",
     "retry_reason": "修复shell管道命令的语法错误，使用cut命令提取命名空间名称，避免资源类型重复指定",
     "error_analysis": "原命令在xargs传递参数时出现资源类型重复指定的问题，使用cut命令提取纯命名空间名称可以解决",
     "confidence": "high"
@@ -788,7 +787,7 @@ class SuperKubectlAgent:
                 return {
                     "success": True,
                     "can_retry": True,
-                    "retry_command": f"create namespace {namespace_name}",
+                    "retry_command": f"kubectl create namespace {namespace_name}",
                     "retry_reason": f"需要先创建命名空间 {namespace_name}",
                     "error_analysis": f"命名空间 {namespace_name} 不存在，需要先创建",
                     "confidence": "high"
