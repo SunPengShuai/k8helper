@@ -2,7 +2,7 @@
 # 基础应用配置
 app:
   name: "k8helper"
-  version: "0.1.0"
+  version: "2.1.0"
   debug: false
   
 # API服务配置

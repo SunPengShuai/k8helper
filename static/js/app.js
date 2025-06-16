@@ -17,6 +17,30 @@ let securityConfig = {
     dangerous_shell_commands: []
 };
 
+// 系统配置页面功能
+let systemConfig = {
+    ai: {
+        hunyuan_api_key: '',
+        openai_api_key: '',
+        preferred_model: 'hunyuan'
+    },
+    retry: {
+        max_retries: 3,
+        retry_delay: 2,
+        enable_smart_retry: true
+    },
+    shell: {
+        whitelist: [],
+        blacklist: [],
+        enable_validation: false
+    },
+    performance: {
+        command_timeout: 60,
+        max_output_lines: 1000,
+        enable_result_cache: true
+    }
+};
+
 function setQuery(query) {
     document.getElementById('query-input').value = query;
 }
@@ -1383,4 +1407,697 @@ async function toggleShellCommands() {
         toggle.checked = !toggle.checked;
         alert('切换失败: ' + error.message);
     }
-} 
+}
+
+// ==================== 系统配置页面功能 ====================
+
+// 初始化系统配置页面
+function initConfigTab() {
+    // 初始化滑块
+    initSliders();
+    
+    // 初始化标签输入
+    initTagInputs();
+    
+    // 绑定事件监听器
+    bindConfigEvents();
+    
+    // 加载系统配置
+    loadSystemConfig();
+    
+    // 加载系统状态
+    loadSystemStatus();
+}
+
+// 初始化滑块
+function initSliders() {
+    const sliders = [
+        { id: 'max-retries', valueId: 'max-retries-value' },
+        { id: 'retry-delay', valueId: 'retry-delay-value' },
+        { id: 'command-timeout', valueId: 'command-timeout-value' },
+        { id: 'max-output-lines', valueId: 'max-output-lines-value' }
+    ];
+    
+    sliders.forEach(slider => {
+        const sliderElement = document.getElementById(slider.id);
+        const valueElement = document.getElementById(slider.valueId);
+        
+        if (sliderElement && valueElement) {
+            sliderElement.addEventListener('input', function() {
+                valueElement.textContent = this.value;
+            });
+        }
+    });
+}
+
+// 初始化标签输入
+function initTagInputs() {
+    const tagInputs = [
+        { inputId: 'shell-whitelist-input', containerId: 'shell-whitelist-tags', configKey: 'shell.whitelist' },
+        { inputId: 'shell-blacklist-input', containerId: 'shell-blacklist-tags', configKey: 'shell.blacklist' }
+    ];
+    
+    tagInputs.forEach(tagInput => {
+        const input = document.getElementById(tagInput.inputId);
+        if (input) {
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addTag(tagInput.inputId, tagInput.containerId, tagInput.configKey);
+                }
+            });
+        }
+    });
+}
+
+// 添加标签
+function addTag(inputId, containerId, configKey) {
+    const input = document.getElementById(inputId);
+    const container = document.getElementById(containerId);
+    const value = input.value.trim();
+    
+    if (!value) return;
+    
+    // 创建标签元素
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+    tag.innerHTML = `
+        <span>${escapeHtml(value)}</span>
+        <button type="button" class="tag-remove" onclick="removeConfigTag(this, '${configKey}')">×</button>
+    `;
+    
+    container.appendChild(tag);
+    input.value = '';
+    
+    // 更新配置
+    const keys = configKey.split('.');
+    if (keys.length === 2) {
+        systemConfig[keys[0]][keys[1]].push(value);
+    }
+}
+
+// 移除标签
+function removeConfigTag(button, configKey) {
+    const tag = button.parentElement;
+    const value = tag.querySelector('span').textContent;
+    
+    // 从配置中移除
+    const keys = configKey.split('.');
+    if (keys.length === 2) {
+        const index = systemConfig[keys[0]][keys[1]].indexOf(value);
+        if (index > -1) {
+            systemConfig[keys[0]][keys[1]].splice(index, 1);
+        }
+    }
+    
+    tag.remove();
+}
+
+// 绑定配置事件
+function bindConfigEvents() {
+    // 密码可见性切换
+    window.togglePasswordVisibility = function(inputId) {
+        const input = document.getElementById(inputId);
+        const button = input.nextElementSibling;
+        
+        if (input.type === 'password') {
+            input.type = 'text';
+            button.textContent = '🙈';
+        } else {
+            input.type = 'password';
+            button.textContent = '👁️';
+        }
+    };
+    
+    // AI连接测试
+    const testAiBtn = document.getElementById('test-ai-connection');
+    if (testAiBtn) {
+        testAiBtn.addEventListener('click', testAiConnection);
+    }
+    
+    // 保存配置按钮
+    const saveButtons = [
+        { id: 'save-ai-config', handler: saveAiConfig },
+        { id: 'save-retry-config', handler: saveRetryConfig },
+        { id: 'save-shell-config', handler: saveShellConfig },
+        { id: 'save-performance-config', handler: savePerformanceConfig }
+    ];
+    
+    saveButtons.forEach(btn => {
+        const element = document.getElementById(btn.id);
+        if (element) {
+            element.addEventListener('click', btn.handler);
+        }
+    });
+    
+    // 配置管理按钮
+    const managementButtons = [
+        { id: 'export-config', handler: exportConfig },
+        { id: 'import-config', handler: importConfig },
+        { id: 'reset-all-config', handler: resetAllConfig },
+        { id: 'refresh-system-status', handler: loadSystemStatus }
+    ];
+    
+    managementButtons.forEach(btn => {
+        const element = document.getElementById(btn.id);
+        if (element) {
+            element.addEventListener('click', btn.handler);
+        }
+    });
+    
+    // 文件输入
+    const fileInput = document.getElementById('config-file-input');
+    if (fileInput) {
+        fileInput.addEventListener('change', handleConfigFileImport);
+    }
+}
+
+// 加载系统配置
+async function loadSystemConfig() {
+    try {
+        const response = await fetch('/api/v1/config/system');
+        const data = await response.json();
+        
+        if (data.success) {
+            systemConfig = { ...systemConfig, ...data.config };
+            updateConfigUI();
+        }
+    } catch (error) {
+        console.error('加载系统配置失败:', error);
+        showNotification('加载系统配置失败', 'error');
+    }
+}
+
+// 更新配置UI
+function updateConfigUI() {
+    // 更新AI配置
+    const hunyuanKey = document.getElementById('hunyuan-api-key');
+    const openaiKey = document.getElementById('openai-api-key');
+    const modelSelect = document.getElementById('ai-model-selection');
+    
+    if (hunyuanKey) hunyuanKey.value = systemConfig.ai.hunyuan_api_key || '';
+    if (openaiKey) openaiKey.value = systemConfig.ai.openai_api_key || '';
+    if (modelSelect) modelSelect.value = systemConfig.ai.preferred_model || 'hunyuan';
+    
+    // 更新重试配置
+    const maxRetries = document.getElementById('max-retries');
+    const retryDelay = document.getElementById('retry-delay');
+    const smartRetry = document.getElementById('enable-smart-retry');
+    
+    if (maxRetries) {
+        maxRetries.value = systemConfig.retry.max_retries || 3;
+        document.getElementById('max-retries-value').textContent = maxRetries.value;
+    }
+    if (retryDelay) {
+        retryDelay.value = systemConfig.retry.retry_delay || 2;
+        document.getElementById('retry-delay-value').textContent = retryDelay.value;
+    }
+    if (smartRetry) smartRetry.checked = systemConfig.retry.enable_smart_retry !== false;
+    
+    // 更新Shell配置
+    updateTagsDisplay('shell-whitelist-tags', systemConfig.shell.whitelist || [], 'shell.whitelist');
+    updateTagsDisplay('shell-blacklist-tags', systemConfig.shell.blacklist || [], 'shell.blacklist');
+    
+    const shellValidation = document.getElementById('enable-shell-validation');
+    if (shellValidation) shellValidation.checked = systemConfig.shell.enable_validation || false;
+    
+    // 更新性能配置
+    const commandTimeout = document.getElementById('command-timeout');
+    const maxOutputLines = document.getElementById('max-output-lines');
+    const resultCache = document.getElementById('enable-result-cache');
+    
+    if (commandTimeout) {
+        commandTimeout.value = systemConfig.performance.command_timeout || 60;
+        document.getElementById('command-timeout-value').textContent = commandTimeout.value;
+    }
+    if (maxOutputLines) {
+        maxOutputLines.value = systemConfig.performance.max_output_lines || 1000;
+        document.getElementById('max-output-lines-value').textContent = maxOutputLines.value;
+    }
+    if (resultCache) resultCache.checked = systemConfig.performance.enable_result_cache !== false;
+}
+
+// 更新标签显示
+function updateTagsDisplay(containerId, tags, configKey) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    container.innerHTML = '';
+    tags.forEach(tag => {
+        const tagElement = document.createElement('div');
+        tagElement.className = 'tag';
+        tagElement.innerHTML = `
+            <span>${escapeHtml(tag)}</span>
+            <button type="button" class="tag-remove" onclick="removeConfigTag(this, '${configKey}')">×</button>
+        `;
+        container.appendChild(tagElement);
+    });
+}
+
+// 测试AI连接
+async function testAiConnection() {
+    const testBtn = document.getElementById('test-ai-connection');
+    const originalText = testBtn.textContent;
+    
+    testBtn.textContent = '🔄 测试中...';
+    testBtn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/v1/ai/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                hunyuan_api_key: document.getElementById('hunyuan-api-key').value,
+                openai_api_key: document.getElementById('openai-api-key').value,
+                preferred_model: document.getElementById('ai-model-selection').value
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('AI连接测试成功！', 'success');
+        } else {
+            showNotification(`AI连接测试失败: ${data.message}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`AI连接测试失败: ${error.message}`, 'error');
+    } finally {
+        testBtn.textContent = originalText;
+        testBtn.disabled = false;
+    }
+}
+
+// 保存AI配置
+async function saveAiConfig() {
+    const saveBtn = document.getElementById('save-ai-config');
+    const originalText = saveBtn.textContent;
+    
+    saveBtn.textContent = '💾 保存中...';
+    saveBtn.disabled = true;
+    
+    try {
+        const config = {
+            hunyuan_api_key: document.getElementById('hunyuan-api-key').value,
+            openai_api_key: document.getElementById('openai-api-key').value,
+            preferred_model: document.getElementById('ai-model-selection').value
+        };
+        
+        const response = await fetch('/api/v1/config/ai', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            systemConfig.ai = { ...systemConfig.ai, ...config };
+            showNotification('AI配置保存成功！', 'success');
+        } else {
+            showNotification(`保存失败: ${data.message}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`保存失败: ${error.message}`, 'error');
+    } finally {
+        saveBtn.textContent = originalText;
+        saveBtn.disabled = false;
+    }
+}
+
+// 保存重试配置
+async function saveRetryConfig() {
+    const saveBtn = document.getElementById('save-retry-config');
+    const originalText = saveBtn.textContent;
+    
+    saveBtn.textContent = '💾 保存中...';
+    saveBtn.disabled = true;
+    
+    try {
+        const config = {
+            max_retries: parseInt(document.getElementById('max-retries').value),
+            retry_delay: parseInt(document.getElementById('retry-delay').value),
+            enable_smart_retry: document.getElementById('enable-smart-retry').checked
+        };
+        
+        const response = await fetch('/api/v1/config/retry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            systemConfig.retry = { ...systemConfig.retry, ...config };
+            showNotification('重试配置保存成功！', 'success');
+        } else {
+            showNotification(`保存失败: ${data.message}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`保存失败: ${error.message}`, 'error');
+    } finally {
+        saveBtn.textContent = originalText;
+        saveBtn.disabled = false;
+    }
+}
+
+// 保存Shell配置
+async function saveShellConfig() {
+    const saveBtn = document.getElementById('save-shell-config');
+    const originalText = saveBtn.textContent;
+    
+    saveBtn.textContent = '💾 保存中...';
+    saveBtn.disabled = true;
+    
+    try {
+        const config = {
+            whitelist: systemConfig.shell.whitelist || [],
+            blacklist: systemConfig.shell.blacklist || [],
+            enable_validation: document.getElementById('enable-shell-validation').checked
+        };
+        
+        const response = await fetch('/api/v1/config/shell', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            systemConfig.shell = { ...systemConfig.shell, ...config };
+            showNotification('Shell配置保存成功！', 'success');
+        } else {
+            showNotification(`保存失败: ${data.message}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`保存失败: ${error.message}`, 'error');
+    } finally {
+        saveBtn.textContent = originalText;
+        saveBtn.disabled = false;
+    }
+}
+
+// 保存性能配置
+async function savePerformanceConfig() {
+    const saveBtn = document.getElementById('save-performance-config');
+    const originalText = saveBtn.textContent;
+    
+    saveBtn.textContent = '💾 保存中...';
+    saveBtn.disabled = true;
+    
+    try {
+        const config = {
+            command_timeout: parseInt(document.getElementById('command-timeout').value),
+            max_output_lines: parseInt(document.getElementById('max-output-lines').value),
+            enable_result_cache: document.getElementById('enable-result-cache').checked
+        };
+        
+        const response = await fetch('/api/v1/config/performance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            systemConfig.performance = { ...systemConfig.performance, ...config };
+            showNotification('性能配置保存成功！', 'success');
+        } else {
+            showNotification(`保存失败: ${data.message}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`保存失败: ${error.message}`, 'error');
+    } finally {
+        saveBtn.textContent = originalText;
+        saveBtn.disabled = false;
+    }
+}
+
+// 导出配置
+async function exportConfig() {
+    try {
+        const response = await fetch('/api/v1/config/export');
+        const data = await response.json();
+        
+        if (data.success) {
+            const blob = new Blob([JSON.stringify(data.config, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `k8helper-config-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showNotification('配置导出成功！', 'success');
+        } else {
+            showNotification(`导出失败: ${data.message}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`导出失败: ${error.message}`, 'error');
+    }
+}
+
+// 导入配置
+function importConfig() {
+    const fileInput = document.getElementById('config-file-input');
+    fileInput.click();
+}
+
+// 处理配置文件导入
+async function handleConfigFileImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    try {
+        const text = await file.text();
+        const config = JSON.parse(text);
+        
+        const response = await fetch('/api/v1/config/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ config })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('配置导入成功！', 'success');
+            loadSystemConfig(); // 重新加载配置
+        } else {
+            showNotification(`导入失败: ${data.message}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`导入失败: ${error.message}`, 'error');
+    }
+    
+    // 清空文件输入
+    event.target.value = '';
+}
+
+// 重置所有配置
+async function resetAllConfig() {
+    if (!confirm('确定要重置所有配置吗？此操作不可撤销！')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/v1/config/reset', { method: 'POST' });
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('配置重置成功！', 'success');
+            loadSystemConfig(); // 重新加载配置
+        } else {
+            showNotification(`重置失败: ${data.message}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`重置失败: ${error.message}`, 'error');
+    }
+}
+
+// 加载系统状态
+async function loadSystemStatus() {
+    const statusDisplay = document.getElementById('system-status-display');
+    const refreshBtn = document.getElementById('refresh-system-status');
+    
+    if (!statusDisplay) return;
+    
+    // 显示加载状态
+    statusDisplay.innerHTML = '<div class="loading">正在加载系统状态...</div>';
+    
+    if (refreshBtn) {
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = '🔄 刷新中...';
+    }
+    
+    try {
+        const response = await fetch('/api/v1/system/status');
+        const data = await response.json();
+        
+        if (data.success) {
+            displaySystemStatus(data.status);
+        } else {
+            statusDisplay.innerHTML = `<div class="error">❌ 加载系统状态失败: ${data.message}</div>`;
+        }
+    } catch (error) {
+        console.error('加载系统状态失败:', error);
+        statusDisplay.innerHTML = `<div class="error">❌ 加载系统状态失败: ${error.message}</div>`;
+    } finally {
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.textContent = '🔄 刷新';
+        }
+    }
+}
+
+// 显示系统状态
+function displaySystemStatus(status) {
+    const statusDisplay = document.getElementById('system-status-display');
+    if (!statusDisplay) return;
+    
+    let html = '';
+    
+    // 系统基本信息
+    if (status.system) {
+        html += `
+            <div class="status-section">
+                <h4>🖥️ 系统信息</h4>
+                <div class="status-item">
+                    <span class="status-label">操作系统:</span>
+                    <span class="status-value">${status.system.os || 'Unknown'}</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Python版本:</span>
+                    <span class="status-value">${status.system.python_version || 'Unknown'}</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">应用版本:</span>
+                    <span class="status-value">${status.system.app_version || '1.0.0'}</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">运行时间:</span>
+                    <span class="status-value">${status.system.uptime || 'Unknown'}</span>
+                </div>
+            </div>
+        `;
+    }
+    
+    // AI服务状态
+    if (status.ai) {
+        const hunyuanStatusClass = status.ai.hunyuan_status === 'available' ? 'success' : 'warning';
+        const hunyuanStatusText = status.ai.hunyuan_status === 'available' ? '✅ 已配置' : 
+                                 status.ai.hunyuan_status === 'not_configured' ? '⚠️ 未配置' : '❌ 未知';
+        
+        const openaiStatusClass = status.ai.openai_status === 'available' ? 'success' : 'warning';
+        const openaiStatusText = status.ai.openai_status === 'available' ? '✅ 已配置' : 
+                                status.ai.openai_status === 'not_configured' ? '⚠️ 未配置' : '❌ 未知';
+        
+        html += `
+            <div class="status-section">
+                <h4>🤖 AI服务状态</h4>
+                <div class="status-item">
+                    <span class="status-label">混元API:</span>
+                    <span class="status-value ${hunyuanStatusClass}">${hunyuanStatusText}</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">OpenAI API:</span>
+                    <span class="status-value ${openaiStatusClass}">${openaiStatusText}</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">当前模型:</span>
+                    <span class="status-value">${status.ai.current_model || 'auto'}</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">服务状态:</span>
+                    <span class="status-value ${status.ai.service_available ? 'success' : 'error'}">
+                        ${status.ai.service_available ? '✅ 可用' : '❌ 不可用'}
+                    </span>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Kubernetes连接状态
+    if (status.kubernetes) {
+        html += `
+            <div class="status-section">
+                <h4>☸️ Kubernetes状态</h4>
+                <div class="status-item">
+                    <span class="status-label">kubectl工具:</span>
+                    <span class="status-value ${status.kubernetes.kubectl_available ? 'success' : 'error'}">
+                        ${status.kubernetes.kubectl_available ? '✅ 已安装' : '❌ 未安装'}
+                    </span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">集群连接:</span>
+                    <span class="status-value ${status.kubernetes.connected ? 'success' : 'error'}">
+                        ${status.kubernetes.connected ? '✅ 已连接' : '❌ 未连接'}
+                    </span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">集群版本:</span>
+                    <span class="status-value">${status.kubernetes.version || 'Unknown'}</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">当前上下文:</span>
+                    <span class="status-value">${status.kubernetes.current_context || 'Unknown'}</span>
+                </div>
+            </div>
+        `;
+    }
+    
+    // 安全配置状态
+    if (status.security) {
+        html += `
+            <div class="status-section">
+                <h4>🛡️ 安全配置</h4>
+                <div class="status-item">
+                    <span class="status-label">超级管理员模式:</span>
+                    <span class="status-value ${status.security.super_admin_mode ? 'warning' : 'success'}">
+                        ${status.security.super_admin_mode ? '⚠️ 已启用' : '✅ 已禁用'}
+                    </span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Shell命令:</span>
+                    <span class="status-value ${status.security.allow_shell_commands ? 'warning' : 'success'}">
+                        ${status.security.allow_shell_commands ? '⚠️ 已启用' : '✅ 已禁用'}
+                    </span>
+                </div>
+            </div>
+        `;
+    }
+    
+    statusDisplay.innerHTML = html || '<div class="info-text">暂无系统状态信息</div>';
+}
+
+// 显示通知
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    // 3秒后自动移除
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 3000);
+}
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    // 原有的初始化代码
+    loadSecurityConfig();
+    loadShellStatus();
+    setupTagInputs();
+    
+    // 新增：初始化系统配置页面
+    initConfigTab();
+}); 

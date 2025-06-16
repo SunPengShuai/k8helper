@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/setting_style.css">
 </head>
 <body>
     <div class="container">
@@ -18,6 +19,7 @@
             <button class="tab-btn active" onclick="switchTab('query')">🔍 智能查询</button>
             <button class="tab-btn" onclick="switchTab('shell')">💻 Shell命令</button>
             <button class="tab-btn" onclick="switchTab('security')">🔒 安全设置</button>
+            <button class="tab-btn" onclick="switchTab('config')">⚙️ 系统配置</button>
         </div>
         
         <div class="main-content">
@@ -302,9 +304,223 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- 系统配置选项卡内容 -->
+            <div id="config-tab" class="tab-content">
+                <div class="config-section">
+                    <div class="config-header">
+                        <h2>⚙️ 系统配置管理</h2>
+                        <p>管理AI API密钥、重试策略、Shell命令黑白名单等系统级配置</p>
+                    </div>
+                    
+                    <!-- AI配置 -->
+                    <div class="config-card">
+                        <div class="config-card-header">
+                            <h3>🤖 AI模型配置</h3>
+                            <div class="config-status">
+                                <span class="status-dot" id="ai-status-dot"></span>
+                                <span id="ai-status-text">检查中...</span>
+                            </div>
+                        </div>
+                        <div class="config-card-content">
+                            <div class="form-group">
+                                <label for="hunyuan-api-key">混元API密钥</label>
+                                <div class="input-with-action">
+                                    <input type="password" id="hunyuan-api-key" class="config-input" placeholder="输入腾讯云混元API密钥">
+                                    <button type="button" class="toggle-password" onclick="togglePasswordVisibility('hunyuan-api-key')">👁️</button>
+                                </div>
+                                <small class="form-help">用于AI智能分析和命令生成</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="openai-api-key">OpenAI API密钥（可选）</label>
+                                <div class="input-with-action">
+                                    <input type="password" id="openai-api-key" class="config-input" placeholder="输入OpenAI API密钥（备用）">
+                                    <button type="button" class="toggle-password" onclick="togglePasswordVisibility('openai-api-key')">👁️</button>
+                                </div>
+                                <small class="form-help">备用AI模型，当混元不可用时使用</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="ai-model-selection">首选AI模型</label>
+                                <select id="ai-model-selection" class="config-select">
+                                    <option value="hunyuan">腾讯云混元</option>
+                                    <option value="openai">OpenAI GPT</option>
+                                    <option value="auto">自动选择</option>
+                                </select>
+                                <small class="form-help">选择优先使用的AI模型</small>
+                            </div>
+                            
+                            <div class="form-actions">
+                                <button id="test-ai-connection" class="test-btn">🔗 测试连接</button>
+                                <button id="save-ai-config" class="save-btn">💾 保存AI配置</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 重试策略配置 -->
+                    <div class="config-card">
+                        <div class="config-card-header">
+                            <h3>🔄 重试策略配置</h3>
+                        </div>
+                        <div class="config-card-content">
+                            <div class="form-group">
+                                <label for="max-retries">最大重试次数</label>
+                                <div class="slider-container">
+                                    <input type="range" id="max-retries" class="config-slider" min="0" max="5" value="3" step="1">
+                                    <span class="slider-value" id="max-retries-value">3</span>
+                                </div>
+                                <small class="form-help">命令执行失败时的最大重试次数（0-5次）</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="retry-delay">重试延迟（秒）</label>
+                                <div class="slider-container">
+                                    <input type="range" id="retry-delay" class="config-slider" min="1" max="10" value="2" step="1">
+                                    <span class="slider-value" id="retry-delay-value">2</span>
+                                </div>
+                                <small class="form-help">每次重试之间的等待时间</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="enable-smart-retry" checked>
+                                    <span class="checkmark"></span>
+                                    启用智能重试
+                                </label>
+                                <small class="form-help">AI会分析错误原因并自动调整命令</small>
+                            </div>
+                            
+                            <div class="form-actions">
+                                <button id="save-retry-config" class="save-btn">💾 保存重试配置</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Shell命令黑白名单 -->
+                    <div class="config-card">
+                        <div class="config-card-header">
+                            <h3>🛡️ Shell命令安全策略</h3>
+                        </div>
+                        <div class="config-card-content">
+                            <div class="form-group">
+                                <label>Shell命令白名单</label>
+                                <div class="tag-input-container">
+                                    <div id="shell-whitelist-tags" class="tags-container"></div>
+                                    <input type="text" id="shell-whitelist-input" class="tag-input" placeholder="输入允许的shell命令，按回车添加">
+                                </div>
+                                <small class="form-help">只有在白名单中的shell命令才能执行（为空则允许所有）</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Shell命令黑名单</label>
+                                <div class="tag-input-container">
+                                    <div id="shell-blacklist-tags" class="tags-container"></div>
+                                    <input type="text" id="shell-blacklist-input" class="tag-input" placeholder="输入禁止的shell命令，按回车添加">
+                                </div>
+                                <small class="form-help">黑名单中的shell命令将被禁止执行</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="enable-shell-validation">
+                                    <span class="checkmark"></span>
+                                    启用Shell命令验证
+                                </label>
+                                <small class="form-help">执行前验证shell命令的安全性</small>
+                            </div>
+                            
+                            <div class="form-actions">
+                                <button id="save-shell-config" class="save-btn">💾 保存Shell配置</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 系统性能配置 -->
+                    <div class="config-card">
+                        <div class="config-card-header">
+                            <h3>⚡ 系统性能配置</h3>
+                        </div>
+                        <div class="config-card-content">
+                            <div class="form-group">
+                                <label for="command-timeout">命令执行超时（秒）</label>
+                                <div class="slider-container">
+                                    <input type="range" id="command-timeout" class="config-slider" min="10" max="300" value="60" step="10">
+                                    <span class="slider-value" id="command-timeout-value">60</span>
+                                </div>
+                                <small class="form-help">单个命令的最大执行时间</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="max-output-lines">最大输出行数</label>
+                                <div class="slider-container">
+                                    <input type="range" id="max-output-lines" class="config-slider" min="100" max="10000" value="1000" step="100">
+                                    <span class="slider-value" id="max-output-lines-value">1000</span>
+                                </div>
+                                <small class="form-help">限制命令输出的最大行数，防止内存溢出</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="enable-result-cache" checked>
+                                    <span class="checkmark"></span>
+                                    启用结果缓存
+                                </label>
+                                <small class="form-help">缓存相同查询的结果，提高响应速度</small>
+                            </div>
+                            
+                            <div class="form-actions">
+                                <button id="save-performance-config" class="save-btn">💾 保存性能配置</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 配置导入导出 -->
+                    <div class="config-card">
+                        <div class="config-card-header">
+                            <h3>📁 配置管理</h3>
+                        </div>
+                        <div class="config-card-content">
+                            <div class="form-group">
+                                <label>配置备份与恢复</label>
+                                <div class="config-management-actions">
+                                    <button id="export-config" class="export-btn">📤 导出配置</button>
+                                    <button id="import-config" class="import-btn">📥 导入配置</button>
+                                    <input type="file" id="config-file-input" accept=".json" style="display: none;">
+                                </div>
+                                <small class="form-help">备份当前配置或从文件恢复配置</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>系统重置</label>
+                                <div class="reset-actions">
+                                    <button id="reset-all-config" class="danger-btn">🔄 重置所有配置</button>
+                                </div>
+                                <small class="form-help">⚠️ 将所有配置重置为默认值，此操作不可撤销</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 当前系统状态 -->
+                    <div class="config-card">
+                        <div class="config-card-header">
+                            <h3>📊 系统状态</h3>
+                            <button id="refresh-system-status" class="refresh-btn">🔄 刷新</button>
+                        </div>
+                        <div class="config-card-content">
+                            <div id="system-status-display" class="status-display">
+                                <div class="loading">正在加载系统状态...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-    
+
+    <!-- 隐藏的文件输入，用于配置导入 -->
+    <input type="file" id="config-file-input" accept=".json" style="display: none;">
+
     <script src="/static/js/app.js"></script>
 </body>
 </html> 

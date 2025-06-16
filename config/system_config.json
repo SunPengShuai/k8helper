@@ -1,0 +1,34 @@
+{
+  "ai": {
+    "hunyuan_api_key": "sk-aKKx6Qee16fJWZSy6rD8H5blDKeaKIJV76j9SyTBePoxT2Y1",
+    "openai_api_key": "sk-aKKx6Qee16fJWZSy6rD8H5blDKeaKIJV76j9SyTBePoxT2Y1",
+    "preferred_model": "openai"
+  },
+  "retry": {
+    "max_retries": 3,
+    "retry_delay": 2,
+    "enable_smart_retry": true
+  },
+  "shell": {
+    "whitelist": [],
+    "blacklist": [
+      "rm",
+      "rmdir",
+      "mv",
+      "chmod",
+      "chown",
+      "sudo",
+      "su",
+      "kill",
+      "killall",
+      "reboot",
+      "shutdown"
+    ],
+    "enable_validation": false
+  },
+  "performance": {
+    "command_timeout": 60,
+    "max_output_lines": 1000,
+    "enable_result_cache": true
+  }
+}

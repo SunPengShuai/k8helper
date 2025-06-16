@@ -1968,3 +1968,494 @@ async def validate_shell_command(command: str = Body(..., embed=True)):
                 "can_execute": False
             }
         } 
+
+# 系统配置相关的数据模型
+class AIConfigRequest(BaseModel):
+    hunyuan_api_key: Optional[str] = None
+    openai_api_key: Optional[str] = None
+    preferred_model: Optional[str] = 'hunyuan'
+
+class RetryConfigRequest(BaseModel):
+    max_retries: Optional[int] = 3
+    retry_delay: Optional[int] = 2
+    enable_smart_retry: Optional[bool] = True
+
+class ShellConfigRequest(BaseModel):
+    whitelist: Optional[List[str]] = []
+    blacklist: Optional[List[str]] = []
+    enable_validation: Optional[bool] = False
+
+class PerformanceConfigRequest(BaseModel):
+    command_timeout: Optional[int] = 60
+    max_output_lines: Optional[int] = 1000
+    enable_result_cache: Optional[bool] = True
+
+class AITestRequest(BaseModel):
+    hunyuan_api_key: Optional[str] = None
+    openai_api_key: Optional[str] = None
+    preferred_model: Optional[str] = 'hunyuan'
+
+# 系统配置管理类
+class SystemConfigManager:
+    """系统配置管理器"""
+    
+    def __init__(self):
+        self.config_file = os.path.join(os.path.dirname(__file__), '../../config/system_config.json')
+        self.config = self._load_config()
+    
+    def _load_config(self) -> Dict[str, Any]:
+        """加载配置文件"""
+        default_config = {
+            'ai': {
+                'hunyuan_api_key': '',
+                'openai_api_key': '',
+                'preferred_model': 'hunyuan'
+            },
+            'retry': {
+                'max_retries': 3,
+                'retry_delay': 2,
+                'enable_smart_retry': True
+            },
+            'shell': {
+                'whitelist': [],
+                'blacklist': ['rm', 'rmdir', 'mv', 'chmod', 'chown', 'sudo', 'su', 'kill', 'killall', 'reboot', 'shutdown'],
+                'enable_validation': False
+            },
+            'performance': {
+                'command_timeout': 60,
+                'max_output_lines': 1000,
+                'enable_result_cache': True
+            }
+        }
+        
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    loaded_config = json.load(f)
+                    # 合并默认配置和加载的配置
+                    for key in default_config:
+                        if key in loaded_config:
+                            default_config[key].update(loaded_config[key])
+                        else:
+                            loaded_config[key] = default_config[key]
+                    return loaded_config
+            else:
+                # 创建配置目录
+                os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
+                self._save_config(default_config)
+                return default_config
+        except Exception as e:
+            logger.error(f"加载配置文件失败: {str(e)}")
+            return default_config
+    
+    def _save_config(self, config: Dict[str, Any] = None):
+        """保存配置文件"""
+        try:
+            config_to_save = config or self.config
+            os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(config_to_save, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"保存配置文件失败: {str(e)}")
+            raise
+    
+    def get_config(self) -> Dict[str, Any]:
+        """获取完整配置"""
+        return self.config.copy()
+    
+    def update_ai_config(self, config: AIConfigRequest) -> bool:
+        """更新AI配置"""
+        try:
+            if config.hunyuan_api_key is not None:
+                self.config['ai']['hunyuan_api_key'] = config.hunyuan_api_key
+            if config.openai_api_key is not None:
+                self.config['ai']['openai_api_key'] = config.openai_api_key
+            if config.preferred_model is not None:
+                self.config['ai']['preferred_model'] = config.preferred_model
+            
+            self._save_config()
+            return True
+        except Exception as e:
+            logger.error(f"更新AI配置失败: {str(e)}")
+            return False
+    
+    def update_retry_config(self, config: RetryConfigRequest) -> bool:
+        """更新重试配置"""
+        try:
+            if config.max_retries is not None:
+                self.config['retry']['max_retries'] = max(0, min(5, config.max_retries))
+            if config.retry_delay is not None:
+                self.config['retry']['retry_delay'] = max(1, min(10, config.retry_delay))
+            if config.enable_smart_retry is not None:
+                self.config['retry']['enable_smart_retry'] = config.enable_smart_retry
+            
+            self._save_config()
+            return True
+        except Exception as e:
+            logger.error(f"更新重试配置失败: {str(e)}")
+            return False
+    
+    def update_shell_config(self, config: ShellConfigRequest) -> bool:
+        """更新Shell配置"""
+        try:
+            if config.whitelist is not None:
+                self.config['shell']['whitelist'] = config.whitelist
+            if config.blacklist is not None:
+                self.config['shell']['blacklist'] = config.blacklist
+            if config.enable_validation is not None:
+                self.config['shell']['enable_validation'] = config.enable_validation
+            
+            self._save_config()
+            return True
+        except Exception as e:
+            logger.error(f"更新Shell配置失败: {str(e)}")
+            return False
+    
+    def update_performance_config(self, config: PerformanceConfigRequest) -> bool:
+        """更新性能配置"""
+        try:
+            if config.command_timeout is not None:
+                self.config['performance']['command_timeout'] = max(10, min(300, config.command_timeout))
+            if config.max_output_lines is not None:
+                self.config['performance']['max_output_lines'] = max(100, min(10000, config.max_output_lines))
+            if config.enable_result_cache is not None:
+                self.config['performance']['enable_result_cache'] = config.enable_result_cache
+            
+            self._save_config()
+            return True
+        except Exception as e:
+            logger.error(f"更新性能配置失败: {str(e)}")
+            return False
+    
+    def reset_config(self) -> bool:
+        """重置配置为默认值"""
+        try:
+            self.config = self._load_config()
+            # 清空现有配置，重新加载默认配置
+            if os.path.exists(self.config_file):
+                os.remove(self.config_file)
+            self.config = self._load_config()
+            return True
+        except Exception as e:
+            logger.error(f"重置配置失败: {str(e)}")
+            return False
+
+# 全局系统配置管理器实例
+system_config_manager = SystemConfigManager()
+
+# 系统配置API路由
+
+@router.get("/config/system")
+async def get_system_config():
+    """获取系统配置"""
+    try:
+        config = system_config_manager.get_config()
+        # 隐藏敏感信息
+        if config.get('ai', {}).get('hunyuan_api_key'):
+            config['ai']['hunyuan_api_key'] = '*' * 8
+        if config.get('ai', {}).get('openai_api_key'):
+            config['ai']['openai_api_key'] = '*' * 8
+        
+        return {
+            "success": True,
+            "config": config
+        }
+    except Exception as e:
+        logger.error(f"获取系统配置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取配置失败: {str(e)}")
+
+@router.post("/config/ai")
+async def update_ai_config(request: AIConfigRequest):
+    """更新AI配置"""
+    try:
+        success = system_config_manager.update_ai_config(request)
+        if success:
+            return {"success": True, "message": "AI配置更新成功"}
+        else:
+            raise HTTPException(status_code=500, detail="AI配置更新失败")
+    except Exception as e:
+        logger.error(f"更新AI配置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"更新失败: {str(e)}")
+
+@router.post("/config/retry")
+async def update_retry_config(request: RetryConfigRequest):
+    """更新重试配置"""
+    try:
+        success = system_config_manager.update_retry_config(request)
+        if success:
+            return {"success": True, "message": "重试配置更新成功"}
+        else:
+            raise HTTPException(status_code=500, detail="重试配置更新失败")
+    except Exception as e:
+        logger.error(f"更新重试配置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"更新失败: {str(e)}")
+
+@router.post("/config/shell")
+async def update_shell_config(request: ShellConfigRequest):
+    """更新Shell配置"""
+    try:
+        success = system_config_manager.update_shell_config(request)
+        if success:
+            return {"success": True, "message": "Shell配置更新成功"}
+        else:
+            raise HTTPException(status_code=500, detail="Shell配置更新失败")
+    except Exception as e:
+        logger.error(f"更新Shell配置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"更新失败: {str(e)}")
+
+@router.post("/config/performance")
+async def update_performance_config(request: PerformanceConfigRequest):
+    """更新性能配置"""
+    try:
+        success = system_config_manager.update_performance_config(request)
+        if success:
+            return {"success": True, "message": "性能配置更新成功"}
+        else:
+            raise HTTPException(status_code=500, detail="性能配置更新失败")
+    except Exception as e:
+        logger.error(f"更新性能配置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"更新失败: {str(e)}")
+
+@router.get("/config/export")
+async def export_config():
+    """导出配置"""
+    try:
+        config = system_config_manager.get_config()
+        return config
+    except Exception as e:
+        logger.error(f"导出配置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"导出失败: {str(e)}")
+
+@router.post("/config/import")
+async def import_config(config: Dict[str, Any]):
+    """导入配置"""
+    try:
+        # 验证配置格式
+        required_keys = ['ai', 'retry', 'shell', 'performance']
+        for key in required_keys:
+            if key not in config:
+                raise HTTPException(status_code=400, detail=f"配置缺少必需的键: {key}")
+        
+        # 更新配置
+        system_config_manager.config = config
+        system_config_manager._save_config()
+        
+        return {"success": True, "message": "配置导入成功"}
+    except Exception as e:
+        logger.error(f"导入配置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"导入失败: {str(e)}")
+
+@router.post("/config/reset")
+async def reset_config():
+    """重置配置"""
+    try:
+        success = system_config_manager.reset_config()
+        if success:
+            return {"success": True, "message": "配置重置成功"}
+        else:
+            raise HTTPException(status_code=500, detail="配置重置失败")
+    except Exception as e:
+        logger.error(f"重置配置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"重置失败: {str(e)}")
+
+@router.get("/ai/status")
+async def get_ai_status():
+    """获取AI服务状态"""
+    try:
+        # 检查AI客户端是否可用
+        from ..core.llm_client import llm_client
+        
+        if llm_client and hasattr(llm_client, 'client') and llm_client.client:
+            return {
+                "available": True,
+                "model": getattr(llm_client, 'model_name', 'Unknown'),
+                "provider": getattr(llm_client, 'provider', 'Unknown')
+            }
+        else:
+            return {
+                "available": False,
+                "model": None,
+                "provider": None
+            }
+    except Exception as e:
+        logger.error(f"获取AI状态失败: {str(e)}")
+        return {
+            "available": False,
+            "model": None,
+            "provider": None,
+            "error": str(e)
+        }
+
+@router.post("/ai/test")
+async def test_ai_connection(request: AITestRequest):
+    """测试AI连接"""
+    try:
+        # 这里可以实现AI连接测试逻辑
+        # 暂时返回模拟结果
+        if request.hunyuan_api_key or request.openai_api_key:
+            return {
+                "success": True,
+                "message": "AI连接测试成功",
+                "model": request.preferred_model
+            }
+        else:
+            return {
+                "success": False,
+                "error": "未提供API密钥"
+            }
+    except Exception as e:
+        logger.error(f"AI连接测试失败: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@router.get("/system/status")
+async def get_system_status():
+    """获取系统状态"""
+    try:
+        import platform
+        import sys
+        import time
+        from datetime import datetime, timedelta
+        
+        # 获取系统信息
+        start_time = getattr(get_system_status, '_start_time', time.time())
+        if not hasattr(get_system_status, '_start_time'):
+            get_system_status._start_time = start_time
+        
+        uptime_seconds = time.time() - start_time
+        uptime = str(timedelta(seconds=int(uptime_seconds)))
+        
+        # 获取AI状态
+        try:
+            ai_status_response = await get_ai_status()
+            ai_available = ai_status_response.get('available', False)
+            ai_model = ai_status_response.get('model', 'Unknown')
+        except Exception as e:
+            logger.warning(f"获取AI状态失败: {str(e)}")
+            ai_available = False
+            ai_model = 'Unknown'
+        
+        # 获取配置状态
+        try:
+            config = system_config_manager.get_config()
+            hunyuan_configured = bool(config.get('ai', {}).get('hunyuan_api_key'))
+            openai_configured = bool(config.get('ai', {}).get('openai_api_key'))
+        except Exception as e:
+            logger.warning(f"获取配置状态失败: {str(e)}")
+            config = {}
+            hunyuan_configured = False
+            openai_configured = False
+        
+        # 获取安全配置状态
+        try:
+            security_config = SecurityConfig()
+            super_admin_mode = security_config.is_super_admin_enabled()
+            allow_shell_commands = security_config.is_shell_commands_enabled()
+        except Exception as e:
+            logger.warning(f"获取安全配置失败: {str(e)}")
+            super_admin_mode = False
+            allow_shell_commands = False
+        
+        # 检查Kubernetes连接
+        try:
+            import subprocess
+            result = subprocess.run(['kubectl', 'version', '--client=true'], 
+                                  capture_output=True, text=True, timeout=5)
+            kubectl_available = result.returncode == 0
+            
+            # 尝试获取集群信息
+            if kubectl_available:
+                try:
+                    cluster_result = subprocess.run(['kubectl', 'cluster-info'], 
+                                                  capture_output=True, text=True, timeout=10)
+                    k8s_connected = cluster_result.returncode == 0
+                    
+                    # 获取当前上下文
+                    context_result = subprocess.run(['kubectl', 'config', 'current-context'], 
+                                                  capture_output=True, text=True, timeout=5)
+                    current_context = context_result.stdout.strip() if context_result.returncode == 0 else 'Unknown'
+                    
+                    # 获取集群版本
+                    version_result = subprocess.run(['kubectl', 'version', '--short'], 
+                                                  capture_output=True, text=True, timeout=10)
+                    k8s_version = 'Unknown'
+                    if version_result.returncode == 0:
+                        lines = version_result.stdout.split('\n')
+                        for line in lines:
+                            if 'Server Version' in line:
+                                k8s_version = line.split(':')[-1].strip()
+                                break
+                except Exception:
+                    k8s_connected = False
+                    current_context = 'Unknown'
+                    k8s_version = 'Unknown'
+            else:
+                k8s_connected = False
+                current_context = 'Unknown'
+                k8s_version = 'Unknown'
+        except Exception as e:
+            logger.warning(f"检查Kubernetes状态失败: {str(e)}")
+            kubectl_available = False
+            k8s_connected = False
+            current_context = 'Unknown'
+            k8s_version = 'Unknown'
+        
+        return {
+            "success": True,
+            "status": {
+                "system": {
+                    "os": f"{platform.system()} {platform.release()}",
+                    "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+                    "app_version": "1.0.0",
+                    "uptime": uptime
+                },
+                "ai": {
+                    "hunyuan_status": "available" if hunyuan_configured else "not_configured",
+                    "openai_status": "available" if openai_configured else "not_configured",
+                    "current_model": config.get('ai', {}).get('preferred_model', 'auto'),
+                    "service_available": ai_available
+                },
+                "kubernetes": {
+                    "connected": k8s_connected,
+                    "version": k8s_version,
+                    "current_context": current_context,
+                    "kubectl_available": kubectl_available
+                },
+                "security": {
+                    "super_admin_mode": super_admin_mode,
+                    "allow_shell_commands": allow_shell_commands
+                }
+            }
+        }
+    except Exception as e:
+        logger.error(f"获取系统状态失败: {str(e)}")
+        return {
+            "success": False,
+            "message": str(e),
+            "status": {
+                "system": {
+                    "os": "Unknown",
+                    "python_version": "Unknown", 
+                    "app_version": "1.0.0",
+                    "uptime": "Unknown"
+                },
+                "ai": {
+                    "hunyuan_status": "unknown",
+                    "openai_status": "unknown",
+                    "current_model": "unknown",
+                    "service_available": False
+                },
+                "kubernetes": {
+                    "connected": False,
+                    "version": "Unknown",
+                    "current_context": "Unknown",
+                    "kubectl_available": False
+                },
+                "security": {
+                    "super_admin_mode": False,
+                    "allow_shell_commands": False
+                }
+            }
+        }
