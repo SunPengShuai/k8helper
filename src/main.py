@@ -17,13 +17,16 @@ app = FastAPI(
     description="Kubernetes智能助手API"
 )
 
+# 获取CORS配置
+cors_config = Config.get_cors_config()
+
 # 配置CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
+    allow_origins=cors_config.get('allow_origins', ['*']),
+    allow_credentials=cors_config.get('allow_credentials', True),
+    allow_methods=cors_config.get('allow_methods', ['*']),
+    allow_headers=cors_config.get('allow_headers', ['*'])
 )
 
 # 创建静态文件目录
@@ -45,15 +48,15 @@ async def get_home():
         return FileResponse(static_html_path)
     else:
         # 如果静态文件不存在，返回简单的错误页面
-        return HTMLResponse("""
+        return HTMLResponse(f"""
         <!DOCTYPE html>
         <html>
         <head>
-            <title>K8Helper - 错误</title>
+            <title>{Config.APP_NAME} - 错误</title>
             <meta charset="UTF-8">
         </head>
         <body>
-            <h1>K8Helper</h1>
+            <h1>{Config.APP_NAME}</h1>
             <p>静态文件未找到，请检查 static/index.html 文件是否存在。</p>
         </body>
         </html>
@@ -76,5 +79,5 @@ if __name__ == "__main__":
         "main:app",
         host=Config.API_HOST,
         port=Config.API_PORT,
-        reload=Config.DEBUG
+        reload=Config.API_RELOAD
     ) 

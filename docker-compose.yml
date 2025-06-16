@@ -7,8 +7,7 @@ services:
       - "8080:8080"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - LOG_LEVEL=INFO
-      - KUBERNETES_NAMESPACE=default
     volumes:
       - ${KUBECONFIG:-~/.kube/config}:/root/.kube/config:ro
+      - ./config.yml:/app/config.yml:ro
     restart: unless-stopped 

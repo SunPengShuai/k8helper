@@ -1114,3 +1114,130 @@ See 'kubectl get --help' for usage.
 - CPU: 使用138m核心(占总CPU的1%)
 - 内存: 使用811MiB(占总内存的5%)
 ...
+2025-06-16 16:06:48,098 - src.main - INFO - 配置验证通过
+2025-06-16 16:06:58,447 - src.core.llm_client - ERROR - 分析查询失败: Error code: 401 - {'error': {'id': '86e69bb82a8b8df63136b3659a805fb6', 'message': 'Incorrect API key provided: test_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+Traceback (most recent call last):
+  File "/data/workspace/k8helper/src/core/llm_client.py", line 206, in analyze_query
+    completion = self.client.chat.completions.create(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/_utils/_utils.py", line 287, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/resources/chat/completions/completions.py", line 925, in create
+    return self._post(
+           ^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/_base_client.py", line 1239, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/_base_client.py", line 1034, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.AuthenticationError: Error code: 401 - {'error': {'id': '86e69bb82a8b8df63136b3659a805fb6', 'message': 'Incorrect API key provided: test_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+
+2025-06-16 16:06:58,447 - src.api.routes - INFO - 执行第 1 步命令: get ns -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete ns
+2025-06-16 16:06:58,447 - src.api.routes - INFO - 执行kubectl命令: kubectl get ns -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete ns
+2025-06-16 16:06:58,488 - src.api.routes - WARNING - 步骤 1 第 1 次尝试失败: error: unknown shorthand flag: 'd' in -d/
+See 'kubectl get --help' for usage.
+
+2025-06-16 16:06:59,504 - src.core.llm_client - ERROR - 错误分析失败: Error code: 401 - {'error': {'id': '2304d7ae06aab6308e5382e635db053a', 'message': 'Incorrect API key provided: test_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+2025-06-16 16:06:59,504 - src.api.routes - WARNING - AI无法生成重试命令: 错误分析失败: Error code: 401 - {'error': {'id': '2304d7ae06aab6308e5382e635db053a', 'message': 'Incorrect API key provided: test_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+2025-06-16 16:06:59,504 - src.api.routes - WARNING - 步骤 1 最终失败，停止后续步骤执行
+2025-06-16 16:07:00,516 - src.core.llm_client - ERROR - 生成带重试信息的智能回复失败: Error code: 401 - {'error': {'id': '1d2765e995a563cff8967ac87ee4fce5', 'message': 'Incorrect API key provided: test_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+2025-06-16 16:07:24,731 - src.core.llm_client - ERROR - 分析查询失败: Error code: 401 - {'error': {'id': 'd495a555cf2210d59c256f6a18eb2030', 'message': 'Incorrect API key provided: test_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+Traceback (most recent call last):
+  File "/data/workspace/k8helper/src/core/llm_client.py", line 206, in analyze_query
+    completion = self.client.chat.completions.create(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/_utils/_utils.py", line 287, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/resources/chat/completions/completions.py", line 925, in create
+    return self._post(
+           ^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/_base_client.py", line 1239, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/_base_client.py", line 1034, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.AuthenticationError: Error code: 401 - {'error': {'id': 'd495a555cf2210d59c256f6a18eb2030', 'message': 'Incorrect API key provided: test_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+
+2025-06-16 16:07:24,731 - src.api.routes - INFO - 执行kubectl命令: kubectl get pods --all-namespaces -o wide
+2025-06-16 16:07:25,817 - src.core.llm_client - ERROR - 生成智能回复失败: Error code: 401 - {'error': {'id': '6c9d06a04d12f3b38bf1717cd11124b1', 'message': 'Incorrect API key provided: test_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+2025-06-16 16:07:36,296 - src.core.llm_client - ERROR - 分析查询失败: Error code: 401 - {'error': {'id': '698eb077b6aaa187f1902336c67af052', 'message': 'Incorrect API key provided: test_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+Traceback (most recent call last):
+  File "/data/workspace/k8helper/src/core/llm_client.py", line 206, in analyze_query
+    completion = self.client.chat.completions.create(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/_utils/_utils.py", line 287, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/resources/chat/completions/completions.py", line 925, in create
+    return self._post(
+           ^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/_base_client.py", line 1239, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/_base_client.py", line 1034, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.AuthenticationError: Error code: 401 - {'error': {'id': '698eb077b6aaa187f1902336c67af052', 'message': 'Incorrect API key provided: test_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+
+2025-06-16 16:07:36,297 - src.api.routes - INFO - 执行kubectl命令: kubectl get pods --all-namespaces -o wide
+2025-06-16 16:07:37,383 - src.core.llm_client - ERROR - 生成智能回复失败: Error code: 401 - {'error': {'id': '3b884db78a8a790dd0075e94d7d19825', 'message': 'Incorrect API key provided: test_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+2025-06-16 16:07:42,867 - src.core.llm_client - ERROR - 分析查询失败: Error code: 401 - {'error': {'id': 'd036fb59e6751cf9ab42905ec650d443', 'message': 'Incorrect API key provided: test_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+Traceback (most recent call last):
+  File "/data/workspace/k8helper/src/core/llm_client.py", line 206, in analyze_query
+    completion = self.client.chat.completions.create(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/_utils/_utils.py", line 287, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/resources/chat/completions/completions.py", line 925, in create
+    return self._post(
+           ^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/_base_client.py", line 1239, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/_base_client.py", line 1034, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.AuthenticationError: Error code: 401 - {'error': {'id': 'd036fb59e6751cf9ab42905ec650d443', 'message': 'Incorrect API key provided: test_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+
+2025-06-16 16:07:42,867 - src.api.routes - INFO - 执行kubectl命令: kubectl get pods --all-namespaces -o wide
+2025-06-16 16:07:43,939 - src.core.llm_client - ERROR - 生成智能回复失败: Error code: 401 - {'error': {'id': '92a8b624ab5ff2473077da1c769d9ff5', 'message': 'Incorrect API key provided: test_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+2025-06-16 16:09:55,827 - src.main - INFO - 配置验证通过
+2025-06-16 16:10:33,192 - src.core.llm_client - ERROR - 分析查询失败: Error code: 401 - {'error': {'id': '48491d16940bf3598d96dd71748d2006', 'message': 'Incorrect API key provided: test_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+Traceback (most recent call last):
+  File "/data/workspace/k8helper/src/core/llm_client.py", line 206, in analyze_query
+    completion = self.client.chat.completions.create(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/_utils/_utils.py", line 287, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/resources/chat/completions/completions.py", line 925, in create
+    return self._post(
+           ^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/_base_client.py", line 1239, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/workspace/k8helper/venv/lib64/python3.11/site-packages/openai/_base_client.py", line 1034, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.AuthenticationError: Error code: 401 - {'error': {'id': '48491d16940bf3598d96dd71748d2006', 'message': 'Incorrect API key provided: test_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+
+2025-06-16 16:10:33,192 - src.api.routes - INFO - 执行kubectl命令: kubectl get pods --all-namespaces -o wide
+2025-06-16 16:10:34,260 - src.core.llm_client - ERROR - 生成智能回复失败: Error code: 401 - {'error': {'id': 'd0c478a40edfe86c69329aab87ec328b', 'message': 'Incorrect API key provided: test_key. You can find your API key at https://console.cloud.tencent.com/hunyuan/start.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+2025-06-16 16:11:32,153 - src.main - INFO - 配置验证通过
+2025-06-16 16:11:40,550 - src.core.llm_client - INFO - 混元API原始响应: {"id":"f5d7728041a1bf5691e50f755ffded81","choices":[{"finish_reason":"stop","index":0,"logprobs":null,"message":{"content":"{\n    \"tool_name\": \"kubectl_command\",\n    \"parameters\": {\n        \"command\": \"create namespace 8955 && create deployment nginx-deployment --image=nginx:latest --namespace=8955\",\n        \"output_format\": \"text\",\n        \"explanation\": \"第一步：创建名为8955的命名空间；第二步：在该命名空间中创建一个运行nginx镜像的deployment\",\n        \"steps\": [\n            \"create namespace 8955\",\n            \"create deployment nginx-deployment --image=nginx:latest --namespace=8955\"\n        ]\n    },\n    \"analysis\": \"用户需要创建一个命名空间并在其中部署nginx服务。由于命名空间名称'8955'以数字开头，虽然Kubernetes允许这种命名，但需要注意这可能不符合某些组织的命名规范。解决方案分为两步：先创建命名空间，再在该命名空间中创建nginx deployment。\"\n}","refusal":null,"role":"assistant","annotations":null,"audio":null,"function_call":null,"tool_calls":null}}],"created":1750061500,"model":"hunyuan-turbos-latest","object":"chat.completion","service_tier":null,"system_fingerprint":"","usage":{"completion_tokens":198,"prompt_tokens":1159,"total_tokens":1357,"completion_tokens_details":null,"prompt_tokens_details":null},"note":"以上内容为AI生成，不代表开发者立场，请勿删除或修改本标记"}
+2025-06-16 16:11:40,551 - src.api.routes - INFO - 执行第 1 步命令: create namespace 8955
+2025-06-16 16:11:40,551 - src.api.routes - INFO - 执行kubectl命令: kubectl create namespace 8955
+2025-06-16 16:11:40,601 - src.api.routes - INFO - 执行第 2 步命令: create deployment nginx-deployment --image=nginx:latest --namespace=8955
+2025-06-16 16:11:40,602 - src.api.routes - INFO - 执行kubectl命令: kubectl create deployment nginx-deployment --image=nginx:latest --namespace=8955
+2025-06-16 16:11:41,886 - src.core.llm_client - WARNING - 未找到OpenAI包，将使用内部模拟实现
+2025-06-16 16:11:42,868 - src.core.llm_client - INFO - 生成带重试信息的智能回复: ✅ 操作全部成功完成。已按用户要求创建了名为"8955"的命名空间，并在其中成功部署了一个使用nginx:latest镜像的Deployment（名为nginx-deployment）。两个步骤均一次...
+2025-06-16 16:12:24,840 - src.core.llm_client - INFO - 混元API原始响应: {"id":"ec08df9121aa29abc05b8623544f2296","choices":[{"finish_reason":"stop","index":0,"logprobs":null,"message":{"content":"{\n    \"tool_name\": \"kubectl_command\",\n    \"parameters\": {\n        \"command\": \"get namespaces\",\n        \"output_format\": \"table\",\n        \"explanation\": \"获取集群中所有命名空间的列表\"\n    },\n    \"analysis\": \"用户想要查看Kubernetes集群中的所有命名空间列表，使用get namespaces命令可以简洁地展示这些信息。\"\n}","refusal":null,"role":"assistant","annotations":null,"audio":null,"function_call":null,"tool_calls":null}}],"created":1750061544,"model":"hunyuan-turbos-latest","object":"chat.completion","service_tier":null,"system_fingerprint":"","usage":{"completion_tokens":77,"prompt_tokens":1146,"total_tokens":1223,"completion_tokens_details":null,"prompt_tokens_details":null},"note":"以上内容为AI生成，不代表开发者立场，请勿删除或修改本标记"}
+2025-06-16 16:12:24,840 - src.api.routes - INFO - 执行kubectl命令: kubectl get namespaces
+2025-06-16 16:12:27,674 - src.core.llm_client - INFO - 生成智能回复: ✅ 成功获取了命名空间列表。当前集群中共有16个命名空间处于Active状态，包括默认命名空间(default)和系统命名空间(kube-node-lease、kube-public、kube-sys...
+2025-06-16 16:12:42,740 - src.core.llm_client - INFO - 混元API原始响应: {"id":"dac3a6a8b9c98620efc45fd5e9c6c6af","choices":[{"finish_reason":"stop","index":0,"logprobs":null,"message":{"content":"{\n    \"tool_name\": \"kubectl_command\",\n    \"parameters\": {\n        \"command\": \"get pods -n 8955\",\n        \"output_format\": \"table\",\n        \"namespace\": \"8955\",\n        \"explanation\": \"获取命名空间8955中的所有Pod列表\"\n    },\n    \"analysis\": \"用户想查看特定命名空间(8955)中的Pod列表，使用get pods命令并指定命名空间参数，以表格形式输出结果更清晰易读\"\n}","refusal":null,"role":"assistant","annotations":null,"audio":null,"function_call":null,"tool_calls":null}}],"created":1750061562,"model":"hunyuan-turbos-latest","object":"chat.completion","service_tier":null,"system_fingerprint":"","usage":{"completion_tokens":110,"prompt_tokens":1150,"total_tokens":1260,"completion_tokens_details":null,"prompt_tokens_details":null},"note":"以上内容为AI生成，不代表开发者立场，请勿删除或修改本标记"}
+2025-06-16 16:12:42,740 - src.api.routes - INFO - 执行kubectl命令: kubectl get pods -n 8955
+2025-06-16 16:12:48,927 - src.core.llm_client - INFO - 生成智能回复: ✅ 成功获取了命名空间"8955"中的Pod信息。当前该命名空间下有1个Pod正在运行，具体信息如下：
+
+- Pod名称: nginx-deployment-5dd747964d-cq5v2
+- 就绪...
+2025-06-16 16:12:57,526 - src.main - INFO - 配置验证通过

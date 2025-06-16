@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
 # 复制项目文件
 COPY requirements.txt .
 COPY src/ src/
+COPY config.yml .
 
 # 安装Python依赖
 RUN pip install --no-cache-dir -r requirements.txt
@@ -19,9 +20,6 @@ RUN mkdir -p logs
 
 # 设置环境变量
 ENV PYTHONPATH=/app
-ENV DEBUG=false
-ENV API_HOST=0.0.0.0
-ENV API_PORT=8080
 
 # 暴露端口
 EXPOSE 8080

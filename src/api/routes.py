@@ -11,6 +11,7 @@ import os
 from ..core.k8s_client import KubernetesClient
 from ..core.llm_client import SuperKubectlAgent
 from ..utils.logger import get_logger
+from ..utils.config import Config
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -113,34 +114,40 @@ class VoteRequest(BaseModel):
 class KubectlExecutor:
     """安全的Kubectl命令执行器 - 支持复杂shell语法"""
     
-    # 定义绝对危险的命令列表
-    DANGEROUS_COMMANDS = [
-        'delete', 'remove', 'rm', 'destroy', 'kill', 'terminate',
-        'patch', 'replace', 'edit'
-    ]
+    @classmethod
+    def _get_dangerous_commands(cls):
+        """获取危险命令列表"""
+        base_commands = set(Config.get_dangerous_commands())
+        custom_commands = security_config.custom_dangerous_commands
+        return base_commands.union(custom_commands)
     
-    # 定义只读安全命令
-    SAFE_COMMANDS = [
-        'get', 'describe', 'logs', 'top', 'version', 'cluster-info',
-        'api-resources', 'api-versions', 'config', 'explain'
-    ]
+    @classmethod
+    def _get_safe_commands(cls):
+        """获取安全命令列表"""
+        base_commands = set(Config.get_safe_commands())
+        custom_commands = security_config.custom_safe_commands
+        return base_commands.union(custom_commands)
     
-    # 定义相对安全的创建操作（允许的资源类型）
-    SAFE_CREATE_RESOURCES = [
-        'namespace', 'ns', 'configmap', 'cm', 'secret', 'pod', 'pods',
-        'deployment', 'deploy', 'service', 'svc', 'job', 'cronjob'
-    ]
+    @classmethod
+    def _get_safe_create_resources(cls):
+        """获取安全创建资源列表"""
+        base_resources = set(Config.get_safe_create_resources())
+        custom_resources = security_config.custom_safe_create_resources
+        return base_resources.union(custom_resources)
     
-    # 定义相对安全的扩缩容操作
-    SAFE_SCALE_RESOURCES = [
-        'deployment', 'deploy', 'replicaset', 'rs', 'statefulset', 'sts'
-    ]
+    @classmethod
+    def _get_safe_scale_resources(cls):
+        """获取安全扩缩容资源列表"""
+        base_resources = set(Config.get_safe_scale_resources())
+        custom_resources = security_config.custom_safe_scale_resources
+        return base_resources.union(custom_resources)
     
-    # 定义相对安全的apply操作（允许的资源类型）
-    SAFE_APPLY_RESOURCES = [
-        'namespace', 'ns', 'configmap', 'cm', 'secret', 'pod', 'pods',
-        'deployment', 'deploy', 'service', 'svc', 'job', 'cronjob'
-    ]
+    @classmethod
+    def _get_safe_apply_resources(cls):
+        """获取安全应用资源列表"""
+        base_resources = set(Config.get_safe_apply_resources())
+        custom_resources = security_config.custom_safe_apply_resources
+        return base_resources.union(custom_resources)
     
     @classmethod
     def _detect_shell_syntax(cls, command: str) -> Dict[str, Any]:
@@ -271,10 +278,10 @@ class KubectlExecutor:
         
         # 检查用户自定义的危险命令
         config = security_config.get_config()
-        all_dangerous_commands = set(cls.DANGEROUS_COMMANDS) | set(config["custom_dangerous_commands"])
+        all_dangerous_commands = set(cls._get_dangerous_commands())
         
         # 检查是否是只读安全命令
-        if first_word in cls.SAFE_COMMANDS:
+        if first_word in cls._get_safe_commands():
             return True, ""
         
         # 特殊处理create命令
@@ -282,7 +289,7 @@ class KubectlExecutor:
             if len(command_parts) >= 2:
                 resource_type = command_parts[1]
                 # 合并默认和用户自定义的安全资源
-                all_safe_create_resources = set(cls.SAFE_CREATE_RESOURCES) | set(config["custom_safe_create_resources"])
+                all_safe_create_resources = set(cls._get_safe_create_resources())
                 if resource_type in all_safe_create_resources:
                     return True, ""
                 else:
@@ -295,7 +302,7 @@ class KubectlExecutor:
             if len(command_parts) >= 2:
                 resource_type = command_parts[1].split('/')[0]  # 处理 deployment/name 格式
                 # 合并默认和用户自定义的安全资源
-                all_safe_scale_resources = set(cls.SAFE_SCALE_RESOURCES) | set(config["custom_safe_scale_resources"])
+                all_safe_scale_resources = set(cls._get_safe_scale_resources())
                 if resource_type in all_safe_scale_resources:
                     return True, ""
                 else:
@@ -313,7 +320,7 @@ class KubectlExecutor:
                     try:
                         import yaml
                         yaml_docs = list(yaml.safe_load_all(yaml_content))
-                        all_safe_apply_resources = set(cls.SAFE_APPLY_RESOURCES) | set(config["custom_safe_apply_resources"])
+                        all_safe_apply_resources = set(cls._get_safe_apply_resources())
                         
                         for doc in yaml_docs:
                             if doc and isinstance(doc, dict):
@@ -329,7 +336,7 @@ class KubectlExecutor:
             
             # 检查是否指定了资源类型
             resource_found = False
-            all_safe_apply_resources = set(cls.SAFE_APPLY_RESOURCES) | set(config["custom_safe_apply_resources"])
+            all_safe_apply_resources = set(cls._get_safe_apply_resources())
             for part in command_parts[1:]:
                 if part.startswith('-'):
                     continue
@@ -350,7 +357,7 @@ class KubectlExecutor:
                 return False, f"检测到危险操作 '{dangerous}'，为了安全已阻止执行"
         
         # 未知命令，谨慎处理
-        return False, f"未知命令 '{first_word}'，为了安全已阻止执行。允许的命令类型: {', '.join(cls.SAFE_COMMANDS + ['create', 'scale', 'apply'])}"
+        return False, f"未知命令 '{first_word}'，为了安全已阻止执行。允许的命令类型: {', '.join(cls._get_safe_commands() + ['create', 'scale', 'apply'])}"
     
     @classmethod
     async def execute_kubectl(cls, command: str, timeout: int = 30) -> Dict[str, Any]:
@@ -1405,11 +1412,11 @@ async def get_security_config():
         
         # 添加默认配置信息
         default_config = {
-            "default_dangerous_commands": KubectlExecutor.DANGEROUS_COMMANDS,
-            "default_safe_commands": KubectlExecutor.SAFE_COMMANDS,
-            "default_safe_create_resources": KubectlExecutor.SAFE_CREATE_RESOURCES,
-            "default_safe_apply_resources": KubectlExecutor.SAFE_APPLY_RESOURCES,
-            "default_safe_scale_resources": KubectlExecutor.SAFE_SCALE_RESOURCES
+            "default_dangerous_commands": KubectlExecutor._get_dangerous_commands(),
+            "default_safe_commands": KubectlExecutor._get_safe_commands(),
+            "default_safe_create_resources": KubectlExecutor._get_safe_create_resources(),
+            "default_safe_apply_resources": KubectlExecutor._get_safe_apply_resources(),
+            "default_safe_scale_resources": KubectlExecutor._get_safe_scale_resources()
         }
         
         return {

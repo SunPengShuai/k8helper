@@ -1,3 +1,111 @@
+# K8Helper 统一配置文件
+# 基础应用配置
+app:
+  name: "k8helper"
+  version: "0.1.0"
+  debug: false
+  
+# API服务配置
+api:
+  host: "0.0.0.0"
+  port: 8080
+  reload: true
+  cors:
+    allow_origins: ["*"]
+    allow_credentials: true
+    allow_methods: ["*"]
+    allow_headers: ["*"]
+
+# Kubernetes配置
+kubernetes:
+  config_path: "~/.kube/config"
+  namespace: "default"
+
+# 腾讯云配置
+tencent:
+  secret_id: "AKIDv8RdeT5TdbMuEKDsJWWGm48zc1DCyYu2"
+  secret_key: "0mKm12pPluqZ4MceT4RbYGk04vYyBBxa"
+  region: "ap-guangzhou"
+
+# LLM配置
+llm:
+  hunyuan:
+    api_key: "sk-aKKx6Qee16fJWZSy6rD8H5blDKeaKIJV76j9SyTBePoxT2Y1"
+    secret_key: ""
+  openai:
+    api_key: "${OPENAI_API_KEY}"
+
+# 日志配置
+logging:
+  level: "INFO"
+  log_dir: "logs"
+  file_name: "k8helper.log"
+
+# 安全配置
+security:
+  super_admin_mode: false
+  dangerous_commands:
+    - "delete"
+    - "remove"
+    - "rm"
+    - "destroy"
+    - "kill"
+    - "terminate"
+    - "patch"
+    - "replace"
+    - "edit"
+  
+  safe_commands:
+    - "get"
+    - "describe"
+    - "logs"
+    - "top"
+    - "version"
+    - "cluster-info"
+    - "api-resources"
+    - "api-versions"
+    - "config"
+    - "explain"
+  
+  safe_create_resources:
+    - "namespace"
+    - "ns"
+    - "configmap"
+    - "cm"
+    - "secret"
+    - "pod"
+    - "pods"
+    - "deployment"
+    - "deploy"
+    - "service"
+    - "svc"
+    - "job"
+    - "cronjob"
+  
+  safe_scale_resources:
+    - "deployment"
+    - "deploy"
+    - "replicaset"
+    - "rs"
+    - "statefulset"
+    - "sts"
+  
+  safe_apply_resources:
+    - "namespace"
+    - "ns"
+    - "configmap"
+    - "cm"
+    - "secret"
+    - "pod"
+    - "pods"
+    - "deployment"
+    - "deploy"
+    - "service"
+    - "svc"
+    - "job"
+    - "cronjob"
+
+# Kubernetes API服务配置
 services:
   - name: kubernetes
     type: provider
@@ -27,6 +135,7 @@ services:
         path: /api/v1/namespaces/{namespace}/secrets
         method: GET
 
+# MCP工具配置
 tools:
   - name: pod_analyzer
     description: 分析 Pod 状态和问题
@@ -122,4 +231,14 @@ tools:
         recommendations:
           type: array
           items:
-            type: string 
+            type: string
+
+# Docker配置
+docker:
+  image_name: "k8helper"
+  exposed_port: 8080
+  environment:
+    PYTHONPATH: "/app"
+    DEBUG: "false"
+    API_HOST: "0.0.0.0"
+    API_PORT: "8080" 
