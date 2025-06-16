@@ -33,7 +33,7 @@ llm:
     api_key: "sk-aKKx6Qee16fJWZSy6rD8H5blDKeaKIJV76j9SyTBePoxT2Y1"
     secret_key: ""
   openai:
-    api_key: "${OPENAI_API_KEY}"
+    api_key: "sk-aKKx6Qee16fJWZSy6rD8H5blDKeaKIJV76j9SyTBePoxT2Y1"
 
 # 日志配置
 logging:

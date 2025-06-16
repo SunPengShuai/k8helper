@@ -5,6 +5,18 @@ let cancelRequested = false; // 新增：标记是否已请求取消
 
 let currentFormat = 'auto';
 
+// 全局安全配置变量
+let securityConfig = {
+    super_admin_mode: false,
+    allow_shell_commands: false,
+    custom_dangerous_commands: [],
+    custom_safe_create_resources: [],
+    custom_safe_apply_resources: [],
+    custom_safe_scale_resources: [],
+    safe_shell_commands: [],
+    dangerous_shell_commands: []
+};
+
 function setQuery(query) {
     document.getElementById('query-input').value = query;
 }
@@ -521,15 +533,6 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// 安全设置相关功能
-let securityConfig = {
-    super_admin_mode: false,
-    custom_dangerous_commands: [],
-    custom_safe_create_resources: [],
-    custom_safe_apply_resources: [],
-    custom_safe_scale_resources: []
-};
-
 // 选项卡切换功能
 function switchTab(tabName) {
     // 隐藏所有选项卡内容
@@ -556,64 +559,171 @@ function switchTab(tabName) {
 
 // 加载安全配置
 async function loadSecurityConfig() {
+    const display = document.getElementById('current-config-display');
+    if (display) {
+        display.innerHTML = '<div class="loading">🔄 正在加载配置信息...</div>';
+    }
+    
     try {
+        console.log('开始加载安全配置...');
         const response = await fetch('/api/v1/security/config');
-        const data = await response.json();
         
-        if (data.success) {
-            securityConfig = data.current_config;
-            updateSecurityUI(data);
+        if (!response.ok) {
+            throw new Error(`HTTP错误: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('安全配置API响应:', data);
+        
+        if (data.success && data.data) {
+            securityConfig = data.data.current_config;
+            console.log('更新全局配置:', securityConfig);
+            updateSecurityUI(data.data);
         } else {
-            console.error('加载安全配置失败');
+            throw new Error(data.message || '配置加载失败');
         }
     } catch (error) {
         console.error('加载安全配置失败:', error);
+        if (display) {
+            display.innerHTML = `<div class="error">❌ 加载配置失败: ${error.message}<br><button onclick="loadSecurityConfig()" class="retry-btn">🔄 重试</button></div>`;
+        }
     }
 }
 
 // 更新安全设置UI
 function updateSecurityUI(data) {
-    const config = data.current_config;
-    const defaultConfig = data.default_config;
-    
-    // 更新超级管理员模式状态
-    const toggle = document.getElementById('super-admin-toggle');
-    const status = document.getElementById('super-admin-status');
-    
-    toggle.checked = config.super_admin_mode;
-    if (config.super_admin_mode) {
-        status.textContent = '已启用';
-        status.className = 'enabled';
-    } else {
-        status.textContent = '已禁用';
-        status.className = 'disabled';
+    try {
+        console.log('开始更新安全设置UI，数据:', data);
+        
+        const config = data.current_config;
+        const defaultConfig = data.default_config;
+        
+        if (!config) {
+            throw new Error('当前配置数据为空');
+        }
+        
+        // 更新超级管理员模式状态
+        const toggle = document.getElementById('super-admin-toggle');
+        const status = document.getElementById('super-admin-status');
+        
+        if (toggle && status) {
+            toggle.checked = config.super_admin_mode;
+            if (config.super_admin_mode) {
+                status.textContent = '已启用';
+                status.className = 'enabled';
+            } else {
+                status.textContent = '已禁用';
+                status.className = 'disabled';
+            }
+            console.log('超级管理员状态更新完成:', config.super_admin_mode);
+        }
+        
+        // 更新shell命令状态
+        const shellToggle = document.getElementById('shell-commands-toggle');
+        const shellStatus = document.getElementById('shell-commands-status');
+        
+        if (shellToggle && shellStatus) {
+            shellToggle.checked = config.allow_shell_commands;
+            if (config.allow_shell_commands) {
+                shellStatus.textContent = '已启用';
+                shellStatus.className = 'enabled';
+            } else {
+                shellStatus.textContent = '已禁用';
+                shellStatus.className = 'disabled';
+            }
+            console.log('Shell命令状态更新完成:', config.allow_shell_commands);
+        }
+        
+        // 更新标签显示（添加错误处理）
+        try {
+            updateTags('dangerous-commands-tags', config.custom_dangerous_commands, defaultConfig.default_dangerous_commands);
+            console.log('危险命令标签更新完成');
+        } catch (e) {
+            console.warn('更新危险命令标签失败:', e);
+        }
+        
+        try {
+            updateTags('safe-create-tags', config.custom_safe_create_resources, defaultConfig.default_safe_create_resources);
+            console.log('安全创建资源标签更新完成');
+        } catch (e) {
+            console.warn('更新安全创建资源标签失败:', e);
+        }
+        
+        try {
+            updateTags('safe-apply-tags', config.custom_safe_apply_resources, defaultConfig.default_safe_apply_resources);
+            console.log('安全应用资源标签更新完成');
+        } catch (e) {
+            console.warn('更新安全应用资源标签失败:', e);
+        }
+        
+        try {
+            updateTags('safe-scale-tags', config.custom_safe_scale_resources, defaultConfig.default_safe_scale_resources);
+            console.log('安全扩缩容资源标签更新完成');
+        } catch (e) {
+            console.warn('更新安全扩缩容资源标签失败:', e);
+        }
+        
+        // 更新配置显示
+        try {
+            updateConfigDisplay(config, defaultConfig);
+            console.log('配置显示更新完成');
+        } catch (e) {
+            console.warn('更新配置显示失败:', e);
+        }
+        
+        // 更新shell状态
+        try {
+            loadShellStatus();
+            console.log('Shell状态加载完成');
+        } catch (e) {
+            console.warn('加载shell状态失败:', e);
+        }
+        
+        console.log('安全设置UI更新完成');
+        
+    } catch (error) {
+        console.error('更新安全设置UI失败:', error);
+        console.error('错误数据:', data);
+        // 显示错误信息给用户
+        const configDisplay = document.getElementById('current-config-display');
+        if (configDisplay) {
+            configDisplay.innerHTML = `<div class="error">❌ 更新配置显示失败: ${error.message}<br><button onclick="loadSecurityConfig()" class="retry-btn">🔄 重试</button></div>`;
+        }
     }
-    
-    // 更新标签显示
-    updateTags('dangerous-commands-tags', config.custom_dangerous_commands, defaultConfig.default_dangerous_commands);
-    updateTags('safe-create-tags', config.custom_safe_create_resources, defaultConfig.default_safe_create_resources);
-    updateTags('safe-apply-tags', config.custom_safe_apply_resources, defaultConfig.default_safe_apply_resources);
-    updateTags('safe-scale-tags', config.custom_safe_scale_resources, defaultConfig.default_safe_scale_resources);
-    
-    // 更新配置显示
-    updateConfigDisplay(config, defaultConfig);
 }
 
 // 更新标签显示
 function updateTags(containerId, customItems, defaultItems) {
     const container = document.getElementById(containerId);
+    if (!container) {
+        console.warn(`标签容器 ${containerId} 不存在`);
+        return;
+    }
+    
+    // 确保参数是数组
+    const safeCustomItems = Array.isArray(customItems) ? customItems : [];
+    const safeDefaultItems = Array.isArray(defaultItems) ? defaultItems : [];
+    
     container.innerHTML = '';
     
     // 显示默认项目（不可删除）
-    defaultItems.forEach(item => {
-        const tag = createTag(item, true);
-        container.appendChild(tag);
+    safeDefaultItems.forEach(item => {
+        try {
+            const tag = createTag(item, true);
+            container.appendChild(tag);
+        } catch (e) {
+            console.warn(`创建默认标签失败: ${item}`, e);
+        }
     });
     
     // 显示自定义项目（可删除）
-    customItems.forEach(item => {
-        const tag = createTag(item, false);
-        container.appendChild(tag);
+    safeCustomItems.forEach(item => {
+        try {
+            const tag = createTag(item, false);
+            container.appendChild(tag);
+        } catch (e) {
+            console.warn(`创建自定义标签失败: ${item}`, e);
+        }
     });
 }
 
@@ -661,18 +771,24 @@ function setupTagInputs() {
     
     inputs.forEach(({ id, config, container }) => {
         const input = document.getElementById(id);
-        input.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                const value = this.value.trim();
-                if (value && !securityConfig[config].includes(value)) {
-                    securityConfig[config].push(value);
-                    const containerEl = document.getElementById(container);
-                    const tag = createTag(value, false);
-                    containerEl.appendChild(tag);
-                    this.value = '';
+        if (input) {
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    const value = this.value.trim();
+                    if (value && securityConfig[config] && !securityConfig[config].includes(value)) {
+                        securityConfig[config].push(value);
+                        const containerEl = document.getElementById(container);
+                        if (containerEl) {
+                            const tag = createTag(value, false);
+                            containerEl.appendChild(tag);
+                        }
+                        this.value = '';
+                    }
                 }
-            }
-        });
+            });
+        } else {
+            console.warn(`标签输入框 ${id} 不存在`);
+        }
     });
 }
 
@@ -686,21 +802,37 @@ async function toggleSuperAdmin() {
         const response = await fetch(endpoint, { method: 'POST' });
         const data = await response.json();
         
-        if (data.success) {
-            securityConfig.super_admin_mode = data.super_admin_mode;
-            if (data.super_admin_mode) {
+        console.log('超级管理员切换API响应:', data);
+        
+        if (data.success && data.current_config) {
+            // 更新全局配置
+            securityConfig.super_admin_mode = data.current_config.super_admin_mode;
+            securityConfig.allow_shell_commands = data.current_config.allow_shell_commands;
+            
+            // 更新UI显示
+            if (data.current_config.super_admin_mode) {
                 status.textContent = '已启用';
                 status.className = 'enabled';
             } else {
                 status.textContent = '已禁用';
                 status.className = 'disabled';
             }
+            
+            // 更新配置显示区域
+            try {
+                loadSecurityConfig();
+            } catch (e) {
+                console.warn('重新加载配置失败:', e);
+            }
+            
+            console.log('超级管理员状态更新完成:', data.current_config.super_admin_mode);
         } else {
             // 恢复开关状态
             toggle.checked = !toggle.checked;
             alert('切换失败: ' + (data.message || '未知错误'));
         }
     } catch (error) {
+        console.error('超级管理员切换失败:', error);
         // 恢复开关状态
         toggle.checked = !toggle.checked;
         alert('切换失败: ' + error.message);
@@ -779,67 +911,151 @@ async function resetSecurityConfig() {
 // 更新配置显示
 function updateConfigDisplay(config, defaultConfig) {
     const display = document.getElementById('current-config-display');
+    if (!display) {
+        console.warn('配置显示容器不存在');
+        return;
+    }
     
-    const html = `
-        <div class="config-item">
-            <h5>🔧 超级管理员模式</h5>
-            <div class="config-list">
-                <span class="config-tag ${config.super_admin_mode ? 'active' : ''}">${config.super_admin_mode ? '已启用' : '已禁用'}</span>
-            </div>
-        </div>
+    try {
+        // 确保配置对象存在
+        const safeConfig = config || {};
+        const safeDefaultConfig = defaultConfig || {};
         
-        <div class="config-item">
-            <h5>🚫 危险命令 (默认 + 自定义)</h5>
-            <div class="config-list">
-                ${defaultConfig.default_dangerous_commands.map(cmd => `<span class="config-tag">${cmd}</span>`).join('')}
-                ${config.custom_dangerous_commands.map(cmd => `<span class="config-tag active">${cmd}</span>`).join('')}
-            </div>
-        </div>
+        // 安全的数组处理函数
+        function safeArrayToTags(arr, className = 'config-tag') {
+            if (!Array.isArray(arr)) return '';
+            return arr.map(item => {
+                try {
+                    return `<span class="${className}">${escapeHtml(String(item || ''))}</span>`;
+                } catch (e) {
+                    console.warn('创建标签失败:', item, e);
+                    return '';
+                }
+            }).filter(tag => tag).join('');
+        }
         
-        <div class="config-item">
-            <h5>✅ 允许创建的资源 (默认 + 自定义)</h5>
-            <div class="config-list">
-                ${defaultConfig.default_safe_create_resources.map(res => `<span class="config-tag">${res}</span>`).join('')}
-                ${config.custom_safe_create_resources.map(res => `<span class="config-tag active">${res}</span>`).join('')}
+        const html = `
+            <div class="config-item">
+                <h5>🔧 超级管理员模式</h5>
+                <div class="config-list">
+                    <span class="config-tag ${safeConfig.super_admin_mode ? 'active' : ''}">${safeConfig.super_admin_mode ? '已启用' : '已禁用'}</span>
+                </div>
             </div>
-        </div>
+            
+            <div class="config-item">
+                <h5>💻 Shell命令支持</h5>
+                <div class="config-list">
+                    <span class="config-tag ${safeConfig.allow_shell_commands ? 'active' : ''}">${safeConfig.allow_shell_commands ? '已启用' : '已禁用'}</span>
+                </div>
+            </div>
+            
+            <div class="config-item">
+                <h5>🚫 危险命令 (默认 + 自定义)</h5>
+                <div class="config-list">
+                    ${safeArrayToTags(safeDefaultConfig.default_dangerous_commands)}
+                    ${safeArrayToTags(safeConfig.custom_dangerous_commands, 'config-tag active')}
+                </div>
+            </div>
+            
+            <div class="config-item">
+                <h5>✅ 允许创建的资源 (默认 + 自定义)</h5>
+                <div class="config-list">
+                    ${safeArrayToTags(safeDefaultConfig.default_safe_create_resources)}
+                    ${safeArrayToTags(safeConfig.custom_safe_create_resources, 'config-tag active')}
+                </div>
+            </div>
+            
+            <div class="config-item">
+                <h5>📝 允许Apply的资源 (默认 + 自定义)</h5>
+                <div class="config-list">
+                    ${safeArrayToTags(safeDefaultConfig.default_safe_apply_resources)}
+                    ${safeArrayToTags(safeConfig.custom_safe_apply_resources, 'config-tag active')}
+                </div>
+            </div>
+            
+            <div class="config-item">
+                <h5>📏 允许扩缩容的资源 (默认 + 自定义)</h5>
+                <div class="config-list">
+                    ${safeArrayToTags(safeDefaultConfig.default_safe_scale_resources)}
+                    ${safeArrayToTags(safeConfig.custom_safe_scale_resources, 'config-tag active')}
+                </div>
+            </div>
+        `;
         
-        <div class="config-item">
-            <h5>📝 允许Apply的资源 (默认 + 自定义)</h5>
-            <div class="config-list">
-                ${defaultConfig.default_safe_apply_resources.map(res => `<span class="config-tag">${res}</span>`).join('')}
-                ${config.custom_safe_apply_resources.map(res => `<span class="config-tag active">${res}</span>`).join('')}
-            </div>
-        </div>
-        
-        <div class="config-item">
-            <h5>📏 允许扩缩容的资源 (默认 + 自定义)</h5>
-            <div class="config-list">
-                ${defaultConfig.default_safe_scale_resources.map(res => `<span class="config-tag">${res}</span>`).join('')}
-                ${config.custom_safe_scale_resources.map(res => `<span class="config-tag active">${res}</span>`).join('')}
-            </div>
-        </div>
-    `;
-    
-    display.innerHTML = html;
+        display.innerHTML = html;
+        console.log('配置显示更新成功');
+    } catch (error) {
+        console.error('更新配置显示失败:', error);
+        console.error('配置数据:', { config, defaultConfig });
+        display.innerHTML = '<div class="error">❌ 配置显示更新失败，请刷新页面重试</div>';
+    }
 }
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
-    // 设置标签输入
-    setupTagInputs();
-    
-    // 超级管理员开关事件
-    document.getElementById('super-admin-toggle').addEventListener('change', toggleSuperAdmin);
-    
-    // 保存配置按钮事件
-    document.getElementById('save-config-btn').addEventListener('click', saveSecurityConfig);
-    
-    // 重置配置按钮事件
-    document.getElementById('reset-config-btn').addEventListener('click', resetSecurityConfig);
-    
-    // 刷新配置按钮事件
-    document.getElementById('refresh-config-btn').addEventListener('click', loadSecurityConfig);
+    try {
+        // 设置标签输入
+        setupTagInputs();
+        
+        // 超级管理员开关事件
+        const superAdminToggle = document.getElementById('super-admin-toggle');
+        if (superAdminToggle) {
+            superAdminToggle.addEventListener('change', toggleSuperAdmin);
+        }
+        
+        // Shell命令开关事件
+        const shellCommandsToggle = document.getElementById('shell-commands-toggle');
+        if (shellCommandsToggle) {
+            shellCommandsToggle.addEventListener('change', toggleShellCommands);
+        }
+        
+        // 保存配置按钮事件
+        const saveConfigBtn = document.getElementById('save-config-btn');
+        if (saveConfigBtn) {
+            saveConfigBtn.addEventListener('click', saveSecurityConfig);
+        }
+        
+        // 重置配置按钮事件
+        const resetConfigBtn = document.getElementById('reset-config-btn');
+        if (resetConfigBtn) {
+            resetConfigBtn.addEventListener('click', resetSecurityConfig);
+        }
+        
+        // 刷新配置按钮事件
+        const refreshConfigBtn = document.getElementById('refresh-config-btn');
+        if (refreshConfigBtn) {
+            refreshConfigBtn.addEventListener('click', loadSecurityConfig);
+        }
+        
+        // Shell命令相关按钮事件
+        const validateShellBtn = document.getElementById('validate-shell-btn');
+        if (validateShellBtn) {
+            validateShellBtn.addEventListener('click', validateShellCommand);
+        }
+        
+        const executeShellBtn = document.getElementById('execute-shell-btn');
+        if (executeShellBtn) {
+            executeShellBtn.addEventListener('click', executeShellCommand);
+        }
+        
+        // Shell命令输入框快捷键
+        const shellCommandInput = document.getElementById('shell-command-input');
+        if (shellCommandInput) {
+            shellCommandInput.addEventListener('keydown', function(e) {
+                if (e.ctrlKey && e.key === 'Enter') {
+                    e.preventDefault();
+                    executeShellCommand();
+                } else if (e.ctrlKey && e.key === 'r') {
+                    e.preventDefault();
+                    validateShellCommand();
+                }
+            });
+        }
+        
+        console.log('页面初始化完成');
+    } catch (error) {
+        console.error('页面初始化失败:', error);
+    }
 });
 
 // 切换步骤详情显示
@@ -879,11 +1095,292 @@ function displayTableResult(formattedResult) {
     });
     
     if (formattedResult.data.length > 5) {
-        html += `<tr><td colspan="${formattedResult.headers.length}" class="more-rows">... 还有 ${formattedResult.data.length - 5} 行</td></tr>`;
+        html += `<tr><td colspan="${formattedResult.headers.length}" class="more-rows">... 还有 ${formattedResult.data.length - 5} 行数据</td></tr>`;
     }
     
-    html += '</tbody></table>';
-    html += `<div class="step-stats">总计: ${formattedResult.total_rows} 行</div>`;
-    html += '</div>';
+    html += '</tbody></table></div>';
     return html;
+}
+
+// Shell命令相关功能
+function setShellCommand(command) {
+    document.getElementById('shell-command-input').value = command;
+}
+
+async function loadShellStatus() {
+    try {
+        const response = await fetch('/api/v1/shell/status');
+        const data = await response.json();
+        
+        if (data.success) {
+            updateShellStatusUI(data.data);
+        } else {
+            console.error('加载shell状态失败');
+        }
+    } catch (error) {
+        console.error('加载shell状态失败:', error);
+        updateShellStatusUI({
+            shell_commands_enabled: false,
+            super_admin_mode: false
+        });
+    }
+}
+
+function updateShellStatusUI(status) {
+    const statusDot = document.getElementById('shell-status-dot');
+    const statusText = document.getElementById('shell-status-text');
+    
+    if (status.shell_commands_enabled || status.super_admin_mode) {
+        statusDot.className = 'status-dot enabled';
+        statusText.textContent = status.super_admin_mode ? 'Shell命令已启用 (超级管理员模式)' : 'Shell命令已启用';
+    } else {
+        statusDot.className = 'status-dot disabled';
+        statusText.textContent = 'Shell命令已禁用';
+    }
+}
+
+async function validateShellCommand() {
+    const command = document.getElementById('shell-command-input').value.trim();
+    const validateBtn = document.getElementById('validate-shell-btn');
+    const validationResult = document.getElementById('shell-validation-result');
+    const validationContent = document.getElementById('validation-content');
+    
+    if (!command) {
+        alert('请输入要验证的命令');
+        return;
+    }
+    
+    const originalText = validateBtn.textContent;
+    validateBtn.textContent = '🔍 验证中...';
+    validateBtn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/v1/shell/validate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(command)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+            displayValidationResult(data.data);
+            validationResult.style.display = 'block';
+        } else {
+            validationContent.innerHTML = `<div class="error">验证失败: ${data.data?.error || '未知错误'}</div>`;
+            validationResult.style.display = 'block';
+        }
+        
+    } catch (error) {
+        validationContent.innerHTML = `<div class="error">验证失败: ${error.message}</div>`;
+        validationResult.style.display = 'block';
+    } finally {
+        validateBtn.textContent = originalText;
+        validateBtn.disabled = false;
+    }
+}
+
+function displayValidationResult(data) {
+    const validationContent = document.getElementById('validation-content');
+    
+    const safetyClass = data.is_safe ? 'safe' : 'unsafe';
+    const safetyIcon = data.is_safe ? '✅' : '❌';
+    const canExecuteIcon = data.can_execute ? '▶️' : '🚫';
+    
+    let html = `
+        <div class="validation-summary ${safetyClass}">
+            <div class="validation-item">
+                <span class="validation-label">命令安全性:</span>
+                <span class="validation-value">${safetyIcon} ${data.safety_message}</span>
+            </div>
+            <div class="validation-item">
+                <span class="validation-label">可执行性:</span>
+                <span class="validation-value">${canExecuteIcon} ${data.can_execute ? '可以执行' : '无法执行'}</span>
+            </div>
+            <div class="validation-item">
+                <span class="validation-label">命令类型:</span>
+                <span class="validation-value">${data.syntax_analysis.command_type}</span>
+            </div>
+            <div class="validation-item">
+                <span class="validation-label">复杂度:</span>
+                <span class="validation-value">${data.syntax_analysis.complexity === 'simple' ? '简单' : '复杂'}</span>
+            </div>
+        </div>
+    `;
+    
+    if (data.syntax_analysis.features_used && data.syntax_analysis.features_used.length > 0) {
+        html += `
+            <div class="validation-features">
+                <h4>使用的功能:</h4>
+                <div class="feature-tags">
+                    ${data.syntax_analysis.features_used.map(feature => `<span class="feature-tag">${feature}</span>`).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    if (data.recommendations && data.recommendations.length > 0) {
+        html += `
+            <div class="validation-recommendations">
+                <h4>建议:</h4>
+                <ul>
+                    ${data.recommendations.filter(rec => rec).map(rec => `<li>${rec}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    }
+    
+    validationContent.innerHTML = html;
+}
+
+async function executeShellCommand() {
+    const command = document.getElementById('shell-command-input').value.trim();
+    const timeout = parseInt(document.getElementById('shell-timeout').value);
+    const executeBtn = document.getElementById('execute-shell-btn');
+    const executionResult = document.getElementById('shell-execution-result');
+    const executionContent = document.getElementById('execution-content');
+    const executionCommand = document.getElementById('execution-command');
+    const executionStatus = document.getElementById('execution-status');
+    
+    if (!command) {
+        alert('请输入要执行的命令');
+        return;
+    }
+    
+    const originalText = executeBtn.textContent;
+    executeBtn.textContent = '⏳ 执行中...';
+    executeBtn.disabled = true;
+    
+    executionResult.style.display = 'block';
+    executionCommand.textContent = command;
+    executionStatus.textContent = '执行中...';
+    executionContent.innerHTML = '<div class="loading">正在执行命令，请稍候...</div>';
+    
+    try {
+        const response = await fetch('/api/v1/shell/execute', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                command: command,
+                timeout: timeout
+            })
+        });
+        
+        const data = await response.json();
+        displayExecutionResult(data);
+        
+    } catch (error) {
+        executionStatus.textContent = '执行失败';
+        executionContent.innerHTML = `<div class="error">执行失败: ${error.message}</div>`;
+    } finally {
+        executeBtn.textContent = originalText;
+        executeBtn.disabled = false;
+    }
+}
+
+function displayExecutionResult(data) {
+    const executionStatus = document.getElementById('execution-status');
+    const executionContent = document.getElementById('execution-content');
+    
+    const statusIcon = data.success ? '✅' : '❌';
+    const statusText = data.success ? '执行成功' : '执行失败';
+    const statusClass = data.success ? 'success' : 'error';
+    
+    executionStatus.innerHTML = `<span class="${statusClass}">${statusIcon} ${statusText}</span>`;
+    
+    let html = `
+        <div class="execution-info">
+            <div class="info-item">
+                <span class="info-label">命令:</span>
+                <span class="info-value">${escapeHtml(data.command)}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">命令类型:</span>
+                <span class="info-value">${data.command_type}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">返回码:</span>
+                <span class="info-value">${data.return_code}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">执行时间:</span>
+                <span class="info-value">${data.execution_time}秒超时</span>
+            </div>
+        </div>
+    `;
+    
+    if (data.success && data.output) {
+        html += `
+            <div class="execution-output">
+                <h4>输出结果:</h4>
+                <div class="output-content">
+                    ${displayFormattedOutput(data.formatted_result)}
+                </div>
+            </div>
+        `;
+    }
+    
+    if (data.error) {
+        html += `
+            <div class="execution-error">
+                <h4>错误信息:</h4>
+                <div class="error-content">
+                    <pre>${escapeHtml(data.error)}</pre>
+                </div>
+            </div>
+        `;
+    }
+    
+    executionContent.innerHTML = html;
+}
+
+function displayFormattedOutput(formatted) {
+    if (!formatted) return '<div class="no-output">无输出内容</div>';
+    
+    switch (formatted.type) {
+        case 'table':
+            return displayTableResult(formatted);
+        case 'error':
+            return `<div class="error"><pre>${escapeHtml(formatted.error)}</pre></div>`;
+        case 'text':
+        default:
+            return `<div class="text-output"><pre>${escapeHtml(formatted.content || formatted.output || '')}</pre></div>`;
+    }
+}
+
+async function toggleShellCommands() {
+    const toggle = document.getElementById('shell-commands-toggle');
+    const status = document.getElementById('shell-commands-status');
+    
+    try {
+        const endpoint = toggle.checked ? '/api/v1/security/shell-commands/enable' : '/api/v1/security/shell-commands/disable';
+        const response = await fetch(endpoint, { method: 'POST' });
+        const data = await response.json();
+        
+        if (data.success) {
+            securityConfig.allow_shell_commands = data.current_config.allow_shell_commands;
+            if (data.current_config.allow_shell_commands) {
+                status.textContent = '已启用';
+                status.className = 'enabled';
+            } else {
+                status.textContent = '已禁用';
+                status.className = 'disabled';
+            }
+            
+            // 更新shell状态
+            loadShellStatus();
+        } else {
+            // 恢复开关状态
+            toggle.checked = !toggle.checked;
+            alert('切换失败: ' + (data.message || '未知错误'));
+        }
+    } catch (error) {
+        // 恢复开关状态
+        toggle.checked = !toggle.checked;
+        alert('切换失败: ' + error.message);
+    }
 } 

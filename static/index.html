@@ -16,6 +16,7 @@
         <!-- 选项卡导航 -->
         <div class="tab-navigation">
             <button class="tab-btn active" onclick="switchTab('query')">🔍 智能查询</button>
+            <button class="tab-btn" onclick="switchTab('shell')">💻 Shell命令</button>
             <button class="tab-btn" onclick="switchTab('security')">🔒 安全设置</button>
         </div>
         
@@ -86,6 +87,98 @@
                 </div>
             </div>
             
+            <!-- Shell命令选项卡内容 -->
+            <div id="shell-tab" class="tab-content">
+                <div class="shell-section">
+                    <div class="shell-header">
+                        <h2>💻 Shell命令执行器</h2>
+                        <p>支持复杂shell语法：管道、命令替换、逻辑操作符等</p>
+                        <div class="shell-status" id="shell-status-indicator">
+                            <span class="status-dot" id="shell-status-dot"></span>
+                            <span id="shell-status-text">检查中...</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 命令输入区域 -->
+                    <div class="shell-input-section">
+                        <div class="shell-form">
+                            <div class="shell-input-container">
+                                <textarea id="shell-command-input" class="shell-command-input" 
+                                         placeholder="输入shell命令，例如：&#10;kubectl get pods&#10;kubectl get namespaces | grep '^a'&#10;kubectl delete namespaces $(kubectl get namespaces -o jsonpath=&quot;{.items[*].metadata.name}&quot; | grep '^a')&#10;kubectl get nodes && kubectl get pods --all-namespaces"
+                                         rows="3"></textarea>
+                                <div class="shell-input-actions">
+                                    <button id="validate-shell-btn" class="validate-btn">🔍 验证命令</button>
+                                    <button id="execute-shell-btn" class="execute-btn">▶️ 执行命令</button>
+                                </div>
+                            </div>
+                            
+                            <div class="shell-options">
+                                <label class="shell-option">
+                                    <span>超时时间：</span>
+                                    <select id="shell-timeout">
+                                        <option value="30">30秒</option>
+                                        <option value="60" selected>60秒</option>
+                                        <option value="120">120秒</option>
+                                        <option value="300">300秒</option>
+                                    </select>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 命令示例 -->
+                    <div class="shell-examples">
+                        <h3>📚 命令示例</h3>
+                        <div class="example-grid">
+                            <div class="shell-example-card" onclick="setShellCommand('kubectl get pods')">
+                                <div class="example-title">基础kubectl命令</div>
+                                <div class="example-code">kubectl get pods</div>
+                            </div>
+                            <div class="shell-example-card" onclick="setShellCommand('kubectl get namespaces | grep \'^a\'')">
+                                <div class="example-title">管道操作</div>
+                                <div class="example-code">kubectl get namespaces | grep '^a'</div>
+                            </div>
+                            <div class="shell-example-card" onclick="setShellCommand('kubectl get pods $(kubectl get namespaces -o name | head -1 | cut -d\'/\' -f2)')">
+                                <div class="example-title">命令替换</div>
+                                <div class="example-code">kubectl get pods $(kubectl get namespaces -o name | head -1 | cut -d'/' -f2)</div>
+                            </div>
+                            <div class="shell-example-card" onclick="setShellCommand('kubectl get nodes && kubectl get pods --all-namespaces')">
+                                <div class="example-title">逻辑操作符</div>
+                                <div class="example-code">kubectl get nodes && kubectl get pods --all-namespaces</div>
+                            </div>
+                            <div class="shell-example-card" onclick="setShellCommand('kubectl get pods --all-namespaces | head -10')">
+                                <div class="example-title">限制输出</div>
+                                <div class="example-code">kubectl get pods --all-namespaces | head -10</div>
+                            </div>
+                            <div class="shell-example-card" onclick="setShellCommand('kubectl get pods -o wide | grep Running')">
+                                <div class="example-title">过滤状态</div>
+                                <div class="example-code">kubectl get pods -o wide | grep Running</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 验证结果 -->
+                    <div id="shell-validation-result" class="shell-validation-result" style="display: none;">
+                        <div class="validation-header">
+                            <h3>🔍 命令验证结果</h3>
+                        </div>
+                        <div id="validation-content" class="validation-content"></div>
+                    </div>
+                    
+                    <!-- 执行结果 -->
+                    <div id="shell-execution-result" class="shell-execution-result" style="display: none;">
+                        <div class="execution-header">
+                            <h3>💻 执行结果</h3>
+                            <div class="execution-info">
+                                <span id="execution-command"></span>
+                                <span id="execution-status"></span>
+                            </div>
+                        </div>
+                        <div id="execution-content" class="execution-content"></div>
+                    </div>
+                </div>
+            </div>
+            
             <!-- 安全设置选项卡内容 -->
             <div id="security-tab" class="tab-content">
                 <div class="security-section">
@@ -108,6 +201,41 @@
                         </div>
                         <div class="security-card-content">
                             <p class="warning-text">⚠️ 启用后将允许执行所有kubectl命令，包括删除、修改等危险操作。请谨慎使用！</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Shell命令支持 -->
+                    <div class="security-card">
+                        <div class="security-card-header">
+                            <h3>💻 Shell命令支持</h3>
+                            <div class="shell-commands-toggle">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="shell-commands-toggle">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="shell-commands-status">已禁用</span>
+                            </div>
+                        </div>
+                        <div class="security-card-content">
+                            <p class="info-text">🔧 启用后支持管道、命令替换、逻辑操作符等复杂shell语法</p>
+                            <div class="shell-features">
+                                <div class="feature-item">
+                                    <span class="feature-icon">🔗</span>
+                                    <span class="feature-text">管道操作 (|)</span>
+                                </div>
+                                <div class="feature-item">
+                                    <span class="feature-icon">🔄</span>
+                                    <span class="feature-text">命令替换 $()</span>
+                                </div>
+                                <div class="feature-item">
+                                    <span class="feature-icon">⚡</span>
+                                    <span class="feature-text">逻辑操作符 (&& || ;)</span>
+                                </div>
+                                <div class="feature-item">
+                                    <span class="feature-icon">🛡️</span>
+                                    <span class="feature-text">智能安全检查</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     

@@ -16,11 +16,6 @@ from ..utils.config import Config
 logger = get_logger(__name__)
 router = APIRouter()
 
-# 全局变量，用于存储投票数据，使用线程锁确保并发安全
-vote_data = {"A": 0, "B": 0, "C": 0, "D": 0, "E": 0}
-vote_lock = threading.Lock()
-vote_users = set()  # 记录已投票用户
-
 # 安全配置管理
 class SecurityConfig:
     """动态安全配置管理"""
@@ -31,6 +26,10 @@ class SecurityConfig:
         self.custom_safe_create_resources = set()
         self.custom_safe_apply_resources = set()
         self.custom_safe_scale_resources = set()
+        # 新增：shell命令安全配置
+        self.allow_shell_commands = False
+        self.safe_shell_commands = set(['grep', 'awk', 'sed', 'cut', 'sort', 'uniq', 'head', 'tail', 'wc', 'tr', 'echo'])
+        self.dangerous_shell_commands = set(['rm', 'rmdir', 'mv', 'cp', 'chmod', 'chown', 'sudo', 'su', 'kill', 'killall', 'pkill', 'reboot', 'shutdown', 'dd', 'fdisk', 'mkfs', 'mount', 'umount'])
         self.lock = threading.Lock()
     
     def enable_super_admin_mode(self):
@@ -47,6 +46,21 @@ class SecurityConfig:
         """检查是否启用超级管理员模式"""
         with self.lock:
             return self.super_admin_mode
+    
+    def enable_shell_commands(self):
+        """启用shell命令支持"""
+        with self.lock:
+            self.allow_shell_commands = True
+    
+    def disable_shell_commands(self):
+        """禁用shell命令支持"""
+        with self.lock:
+            self.allow_shell_commands = False
+    
+    def is_shell_commands_enabled(self):
+        """检查是否启用shell命令支持"""
+        with self.lock:
+            return self.allow_shell_commands
     
     def add_dangerous_command(self, command: str):
         """添加危险命令"""
@@ -83,10 +97,13 @@ class SecurityConfig:
         with self.lock:
             return {
                 "super_admin_mode": self.super_admin_mode,
+                "allow_shell_commands": self.allow_shell_commands,
                 "custom_dangerous_commands": list(self.custom_dangerous_commands),
                 "custom_safe_create_resources": list(self.custom_safe_create_resources),
                 "custom_safe_apply_resources": list(self.custom_safe_apply_resources),
-                "custom_safe_scale_resources": list(self.custom_safe_scale_resources)
+                "custom_safe_scale_resources": list(self.custom_safe_scale_resources),
+                "safe_shell_commands": list(self.safe_shell_commands),
+                "dangerous_shell_commands": list(self.dangerous_shell_commands)
             }
 
 # 全局安全配置实例
@@ -94,6 +111,7 @@ security_config = SecurityConfig()
 
 class SecurityConfigRequest(BaseModel):
     super_admin_mode: Optional[bool] = None
+    allow_shell_commands: Optional[bool] = None
     dangerous_commands: Optional[List[str]] = None
     safe_create_resources: Optional[List[str]] = None
     safe_apply_resources: Optional[List[str]] = None
@@ -107,12 +125,12 @@ class ToolResponse(BaseModel):
     tool_name: str
     parameters: Dict[str, Any]
 
-class VoteRequest(BaseModel):
-    user_id: str
-    option: str
+class ShellCommandRequest(BaseModel):
+    command: str
+    timeout: Optional[int] = 30
 
-class KubectlExecutor:
-    """安全的Kubectl命令执行器 - 支持复杂shell语法"""
+class EnhancedKubectlExecutor:
+    """增强版Kubectl命令执行器 - 支持shell命令组合"""
     
     @classmethod
     def _get_dangerous_commands(cls):
@@ -150,82 +168,50 @@ class KubectlExecutor:
         return base_resources.union(custom_resources)
     
     @classmethod
-    def _detect_shell_syntax(cls, command: str) -> Dict[str, Any]:
+    def _detect_command_type(cls, command: str) -> Dict[str, Any]:
         """
-        检测命令中的shell语法
+        检测命令类型和结构
         
         Args:
-            command: 原始命令（可能包含或不包含kubectl前缀）
+            command: 原始命令
             
         Returns:
-            Dict: 检测结果，包含语法类型和解析信息
+            Dict: 检测结果，包含命令类型和解析信息
         """
         command = command.strip()
         
-        # 检测heredoc语法
-        if '<<' in command:
-            # 匹配 kubectl apply -f - <<EOF ... EOF 格式
-            heredoc_pattern = r'kubectl\s+apply\s+-f\s+-\s+<<(\w+)\s+(.*?)\s+\1'
-            match = re.search(heredoc_pattern, command, re.DOTALL)
-            if match:
-                delimiter = match.group(1)
-                yaml_content = match.group(2).strip()
-                return {
-                    "type": "heredoc",
-                    "kubectl_command": "apply -f -",
-                    "yaml_content": yaml_content,
-                    "delimiter": delimiter
-                }
+        # 检测命令替换语法 $(...)
+        if '$(' in command and ')' in command:
+            return cls._parse_command_substitution(command)
         
         # 检测管道语法
-        if '|' in command and 'kubectl' in command:
-            # 匹配 echo "yaml" | kubectl apply -f - 格式
-            pipe_pattern = r'echo\s+["\']([^"\']*)["\']?\s*\|\s*kubectl\s+(.+)'
-            match = re.search(pipe_pattern, command, re.DOTALL)
-            if match:
-                yaml_content = match.group(1)
-                kubectl_command = match.group(2)
-                return {
-                    "type": "pipe",
-                    "kubectl_command": kubectl_command,
-                    "yaml_content": yaml_content
-                }
+        if '|' in command:
+            return cls._parse_pipeline(command)
         
-        # 检测多行YAML内容
-        if 'apiVersion:' in command and 'kind:' in command:
-            # 提取kubectl命令和YAML内容
-            lines = command.split('\n')
-            kubectl_line = None
-            yaml_lines = []
-            
-            for line in lines:
-                if line.strip().startswith('kubectl'):
-                    kubectl_line = line.strip()
-                elif line.strip() and ('apiVersion:' in line or 'kind:' in line or 'metadata:' in line or 'spec:' in line or line.startswith('  ') or line.startswith('-')):
-                    yaml_lines.append(line)
-            
-            if kubectl_line and yaml_lines:
-                kubectl_command = kubectl_line.replace('kubectl ', '')
-                yaml_content = '\n'.join(yaml_lines)
-                return {
-                    "type": "multiline_yaml",
-                    "kubectl_command": kubectl_command,
-                    "yaml_content": yaml_content
-                }
+        # 检测heredoc语法
+        if '<<' in command:
+            return cls._parse_heredoc(command)
         
-        # 普通kubectl命令（带kubectl前缀）
+        # 检测逻辑操作符 && || ;
+        if any(op in command for op in ['&&', '||', ';']):
+            return cls._parse_logical_operators(command)
+        
+        # 检测重定向 > >> < 2>
+        if any(op in command for op in ['>', '<', '2>']):
+            return cls._parse_redirection(command)
+        
+        # 检测简单kubectl命令
         if command.startswith('kubectl '):
             return {
-                "type": "simple",
-                "kubectl_command": command.replace('kubectl ', '')
+                "type": "simple_kubectl",
+                "kubectl_command": command.replace('kubectl ', ''),
+                "original_command": command
             }
         
-        # 普通kubectl子命令（不带kubectl前缀）- 这是AI生成的常见格式
-        # 检查是否是有效的kubectl子命令
+        # 检测kubectl子命令（不带kubectl前缀）
         command_parts = command.split()
         if command_parts:
             first_word = command_parts[0].lower()
-            # 检查是否是已知的kubectl子命令
             known_kubectl_commands = [
                 'get', 'describe', 'logs', 'top', 'version', 'cluster-info',
                 'api-resources', 'api-versions', 'config', 'explain',
@@ -236,22 +222,128 @@ class KubectlExecutor:
             
             if first_word in known_kubectl_commands:
                 return {
-                    "type": "simple",
-                    "kubectl_command": command
+                    "type": "simple_kubectl",
+                    "kubectl_command": command,
+                    "original_command": f"kubectl {command}"
                 }
         
+        # 检测纯shell命令
         return {
-            "type": "unknown",
+            "type": "shell_command",
+            "shell_command": command,
             "original_command": command
         }
     
     @classmethod
-    def is_safe_command(cls, command: str) -> tuple[bool, str]:
+    def _parse_command_substitution(cls, command: str) -> Dict[str, Any]:
+        """解析命令替换语法 $(...)"""
+        # 匹配 $(...) 模式
+        substitution_pattern = r'\$\(([^)]+)\)'
+        matches = re.findall(substitution_pattern, command)
+        
+        if not matches:
+            return {"type": "unknown", "original_command": command}
+        
+        # 分析主命令和子命令
+        main_command = command
+        sub_commands = []
+        
+        for match in matches:
+            sub_commands.append(match.strip())
+        
+        return {
+            "type": "command_substitution",
+            "main_command": main_command,
+            "sub_commands": sub_commands,
+            "original_command": command
+        }
+    
+    @classmethod
+    def _parse_pipeline(cls, command: str) -> Dict[str, Any]:
+        """解析管道语法"""
+        # 分割管道命令
+        pipe_commands = [cmd.strip() for cmd in command.split('|')]
+        
+        return {
+            "type": "pipeline",
+            "commands": pipe_commands,
+            "original_command": command
+        }
+    
+    @classmethod
+    def _parse_heredoc(cls, command: str) -> Dict[str, Any]:
+        """解析heredoc语法"""
+        heredoc_pattern = r'kubectl\s+apply\s+-f\s+-\s+<<(\w+)\s+(.*?)\s+\1'
+        match = re.search(heredoc_pattern, command, re.DOTALL)
+        
+        if match:
+            delimiter = match.group(1)
+            yaml_content = match.group(2).strip()
+            return {
+                "type": "heredoc",
+                "kubectl_command": "apply -f -",
+                "yaml_content": yaml_content,
+                "delimiter": delimiter,
+                "original_command": command
+            }
+        
+        return {"type": "unknown", "original_command": command}
+    
+    @classmethod
+    def _parse_logical_operators(cls, command: str) -> Dict[str, Any]:
+        """解析逻辑操作符"""
+        # 分割逻辑操作符
+        if '&&' in command:
+            commands = [cmd.strip() for cmd in command.split('&&')]
+            operator = 'AND'
+        elif '||' in command:
+            commands = [cmd.strip() for cmd in command.split('||')]
+            operator = 'OR'
+        elif ';' in command:
+            commands = [cmd.strip() for cmd in command.split(';')]
+            operator = 'SEQUENCE'
+        else:
+            return {"type": "unknown", "original_command": command}
+        
+        return {
+            "type": "logical_operators",
+            "operator": operator,
+            "commands": commands,
+            "original_command": command
+        }
+    
+    @classmethod
+    def _parse_redirection(cls, command: str) -> Dict[str, Any]:
+        """解析重定向语法"""
+        # 简单的重定向检测
+        if '>' in command:
+            parts = command.split('>', 1)
+            base_command = parts[0].strip()
+            redirect_target = parts[1].strip()
+            redirect_type = 'output'
+        elif '<' in command:
+            parts = command.split('<', 1)
+            base_command = parts[0].strip()
+            redirect_target = parts[1].strip()
+            redirect_type = 'input'
+        else:
+            return {"type": "unknown", "original_command": command}
+        
+        return {
+            "type": "redirection",
+            "base_command": base_command,
+            "redirect_target": redirect_target,
+            "redirect_type": redirect_type,
+            "original_command": command
+        }
+    
+    @classmethod
+    def _analyze_command_safety(cls, command_info: Dict[str, Any]) -> tuple[bool, str]:
         """
-        检查命令是否安全（支持复杂shell语法）
+        分析命令安全性
         
         Args:
-            command: kubectl命令或shell命令
+            command_info: 命令解析信息
             
         Returns:
             tuple: (是否安全, 警告信息)
@@ -260,145 +352,224 @@ class KubectlExecutor:
         if security_config.is_super_admin_enabled():
             return True, "超级管理员模式：允许所有命令"
         
-        # 解析shell语法
-        syntax_info = cls._detect_shell_syntax(command)
+        command_type = command_info.get("type", "unknown")
         
-        if syntax_info["type"] == "unknown":
-            return False, f"无法解析的命令格式: {command[:100]}..."
+        if command_type == "simple_kubectl":
+            return cls._check_kubectl_safety(command_info["kubectl_command"])
         
-        # 获取实际的kubectl命令
-        kubectl_command = syntax_info.get("kubectl_command", "")
-        if not kubectl_command:
-            return False, "未找到有效的kubectl命令"
+        elif command_type == "shell_command":
+            if not security_config.is_shell_commands_enabled():
+                return False, "Shell命令支持未启用，仅允许kubectl命令"
+            return cls._check_shell_safety(command_info["shell_command"])
         
-        # 对kubectl命令进行安全检查
+        elif command_type == "pipeline":
+            return cls._check_pipeline_safety(command_info["commands"])
+        
+        elif command_type == "command_substitution":
+            return cls._check_command_substitution_safety(command_info)
+        
+        elif command_type == "logical_operators":
+            return cls._check_logical_operators_safety(command_info["commands"])
+        
+        elif command_type == "heredoc":
+            return cls._check_kubectl_safety(command_info["kubectl_command"])
+        
+        elif command_type == "redirection":
+            # 重定向通常比较危险，需要特别检查
+            return False, "重定向操作存在安全风险，已阻止执行"
+        
+        else:
+            return False, f"未知命令类型: {command_type}"
+    
+    @classmethod
+    def _check_kubectl_safety(cls, kubectl_command: str) -> tuple[bool, str]:
+        """检查kubectl命令安全性"""
         command_lower = kubectl_command.lower().strip()
         command_parts = command_lower.split()
         first_word = command_parts[0] if command_parts else ""
-        
-        # 检查用户自定义的危险命令
-        config = security_config.get_config()
-        all_dangerous_commands = set(cls._get_dangerous_commands())
         
         # 检查是否是只读安全命令
         if first_word in cls._get_safe_commands():
             return True, ""
         
-        # 特殊处理create命令
+        # 检查危险命令
+        all_dangerous_commands = cls._get_dangerous_commands()
+        for dangerous in all_dangerous_commands:
+            if dangerous in command_lower:
+                return False, f"检测到危险操作 '{dangerous}'"
+        
+        # 特殊处理create、scale、apply命令
         if first_word == 'create':
             if len(command_parts) >= 2:
                 resource_type = command_parts[1]
-                # 合并默认和用户自定义的安全资源
-                all_safe_create_resources = set(cls._get_safe_create_resources())
-                if resource_type in all_safe_create_resources:
+                if resource_type in cls._get_safe_create_resources():
                     return True, ""
                 else:
-                    return False, f"不允许创建资源类型 '{resource_type}'，仅允许创建: {', '.join(sorted(all_safe_create_resources))}"
-            else:
-                return False, "create命令缺少资源类型参数"
+                    return False, f"不允许创建资源类型 '{resource_type}'"
         
-        # 特殊处理scale命令
-        if first_word == 'scale':
+        elif first_word == 'scale':
             if len(command_parts) >= 2:
-                resource_type = command_parts[1].split('/')[0]  # 处理 deployment/name 格式
-                # 合并默认和用户自定义的安全资源
-                all_safe_scale_resources = set(cls._get_safe_scale_resources())
-                if resource_type in all_safe_scale_resources:
+                resource_type = command_parts[1].split('/')[0]
+                if resource_type in cls._get_safe_scale_resources():
                     return True, ""
                 else:
-                    return False, f"不允许扩缩容资源类型 '{resource_type}'，仅允许扩缩容: {', '.join(sorted(all_safe_scale_resources))}"
-            else:
-                return False, "scale命令缺少资源类型参数"
+                    return False, f"不允许扩缩容资源类型 '{resource_type}'"
         
-        # 特殊处理apply命令
-        if first_word == 'apply':
-            # 对于apply -f -（从stdin读取），需要检查YAML内容
-            if '-f' in command_parts and '-' in command_parts:
-                yaml_content = syntax_info.get("yaml_content", "")
-                if yaml_content:
-                    # 解析YAML内容，检查资源类型
-                    try:
-                        import yaml
-                        yaml_docs = list(yaml.safe_load_all(yaml_content))
-                        all_safe_apply_resources = set(cls._get_safe_apply_resources())
-                        
-                        for doc in yaml_docs:
-                            if doc and isinstance(doc, dict):
-                                kind = doc.get('kind', '').lower()
-                                if kind not in all_safe_apply_resources:
-                                    return False, f"不允许apply资源类型 '{kind}'，仅允许apply: {', '.join(sorted(all_safe_apply_resources))}"
-                        
-                        return True, ""
-                    except Exception as e:
-                        return False, f"YAML内容解析失败: {str(e)}"
-                else:
-                    return False, "apply -f - 命令缺少YAML内容"
-            
-            # 检查是否指定了资源类型
-            resource_found = False
-            all_safe_apply_resources = set(cls._get_safe_apply_resources())
-            for part in command_parts[1:]:
-                if part.startswith('-'):
-                    continue
-                # 检查是否是安全的资源类型
-                resource_type = part.split('/')[0] if '/' in part else part
-                if resource_type in all_safe_apply_resources:
-                    resource_found = True
-                    break
-            
-            if resource_found:
-                return True, ""
-            else:
-                return False, f"apply命令未指定安全的资源类型，仅允许apply: {', '.join(sorted(all_safe_apply_resources))}"
+        elif first_word == 'apply':
+            return True, ""  # apply命令相对安全
         
-        # 检查是否是绝对危险命令
-        for dangerous in all_dangerous_commands:
-            if dangerous in command_lower:
-                return False, f"检测到危险操作 '{dangerous}'，为了安全已阻止执行"
-        
-        # 未知命令，谨慎处理
-        return False, f"未知命令 '{first_word}'，为了安全已阻止执行。允许的命令类型: {', '.join(cls._get_safe_commands() + ['create', 'scale', 'apply'])}"
+        return False, f"未知kubectl命令 '{first_word}'"
     
     @classmethod
-    async def execute_kubectl(cls, command: str, timeout: int = 30) -> Dict[str, Any]:
+    def _check_shell_safety(cls, shell_command: str) -> tuple[bool, str]:
+        """检查shell命令安全性"""
+        command_parts = shell_command.lower().split()
+        if not command_parts:
+            return False, "空命令"
+        
+        first_word = command_parts[0]
+        
+        # 检查危险shell命令
+        if first_word in security_config.dangerous_shell_commands:
+            return False, f"危险shell命令 '{first_word}' 已被阻止"
+        
+        # 检查安全shell命令
+        if first_word in security_config.safe_shell_commands:
+            return True, ""
+        
+        # 其他命令需要谨慎处理
+        return False, f"未知shell命令 '{first_word}'"
+    
+    @classmethod
+    def _check_pipeline_safety(cls, commands: List[str]) -> tuple[bool, str]:
+        """检查管道命令安全性"""
+        for i, cmd in enumerate(commands):
+            cmd = cmd.strip()
+            
+            # 检查每个管道命令
+            if cmd.startswith('kubectl '):
+                is_safe, msg = cls._check_kubectl_safety(cmd.replace('kubectl ', ''))
+            else:
+                # 检查是否是kubectl子命令
+                cmd_parts = cmd.split()
+                if cmd_parts and cmd_parts[0].lower() in ['get', 'describe', 'logs', 'top', 'version']:
+                    is_safe, msg = cls._check_kubectl_safety(cmd)
+                else:
+                    # 检查shell命令
+                    if not security_config.is_shell_commands_enabled():
+                        return False, f"管道中的shell命令 '{cmd}' 未启用"
+                    is_safe, msg = cls._check_shell_safety(cmd)
+            
+            if not is_safe:
+                return False, f"管道第{i+1}个命令不安全: {msg}"
+        
+        return True, ""
+    
+    @classmethod
+    def _check_command_substitution_safety(cls, command_info: Dict[str, Any]) -> tuple[bool, str]:
+        """检查命令替换安全性"""
+        # 检查子命令
+        for i, sub_cmd in enumerate(command_info["sub_commands"]):
+            if sub_cmd.startswith('kubectl '):
+                is_safe, msg = cls._check_kubectl_safety(sub_cmd.replace('kubectl ', ''))
+            else:
+                # 检查是否是kubectl子命令
+                cmd_parts = sub_cmd.split()
+                if cmd_parts and cmd_parts[0].lower() in ['get', 'describe', 'logs', 'top', 'version']:
+                    is_safe, msg = cls._check_kubectl_safety(sub_cmd)
+                else:
+                    if not security_config.is_shell_commands_enabled():
+                        return False, f"命令替换中的shell命令 '{sub_cmd}' 未启用"
+                    is_safe, msg = cls._check_shell_safety(sub_cmd)
+            
+            if not is_safe:
+                return False, f"命令替换第{i+1}个子命令不安全: {msg}"
+        
+        # 检查主命令
+        main_cmd = command_info["main_command"]
+        # 暂时移除命令替换部分进行检查
+        import re
+        main_cmd_clean = re.sub(r'\$\([^)]+\)', 'SUBSTITUTION', main_cmd)
+        
+        if 'kubectl' in main_cmd_clean:
+            # 主命令包含kubectl，需要特殊处理
+            return True, ""
+        else:
+            if not security_config.is_shell_commands_enabled():
+                return False, "主命令中的shell操作未启用"
+            # 简单检查主命令结构
+            return True, ""
+    
+    @classmethod
+    def _check_logical_operators_safety(cls, commands: List[str]) -> tuple[bool, str]:
+        """检查逻辑操作符命令安全性"""
+        for i, cmd in enumerate(commands):
+            cmd = cmd.strip()
+            
+            # 递归检查每个命令
+            cmd_info = cls._detect_command_type(cmd)
+            is_safe, msg = cls._analyze_command_safety(cmd_info)
+            
+            if not is_safe:
+                return False, f"逻辑操作第{i+1}个命令不安全: {msg}"
+        
+        return True, ""
+    
+    @classmethod
+    async def execute_command(cls, command: str, timeout: int = 60) -> Dict[str, Any]:
         """
-        安全执行kubectl命令（支持复杂shell语法）
+        执行命令（支持复杂shell语法）
         
         Args:
-            command: kubectl命令或shell命令
+            command: 要执行的命令
             timeout: 超时时间（秒）
             
         Returns:
             Dict: 执行结果
         """
         try:
+            # 解析命令
+            command_info = cls._detect_command_type(command)
+            
             # 安全检查
-            is_safe, warning = cls.is_safe_command(command)
+            is_safe, warning = cls._analyze_command_safety(command_info)
             if not is_safe:
                 return {
                     "success": False,
                     "error": warning,
                     "output": "",
-                    "command": command
+                    "command": command,
+                    "command_type": command_info.get("type", "unknown")
                 }
             
-            # 解析shell语法
-            syntax_info = cls._detect_shell_syntax(command)
+            # 根据命令类型执行
+            command_type = command_info.get("type", "unknown")
             
-            if syntax_info["type"] == "simple":
-                # 简单kubectl命令
-                return await cls._execute_simple_kubectl(syntax_info["kubectl_command"], timeout)
+            if command_type == "simple_kubectl":
+                return await cls._execute_simple_kubectl(command_info, timeout)
             
-            elif syntax_info["type"] in ["heredoc", "pipe", "multiline_yaml"]:
-                # 复杂shell语法，需要通过临时文件或stdin处理
-                return await cls._execute_complex_kubectl(syntax_info, timeout)
+            elif command_type == "pipeline":
+                return await cls._execute_pipeline(command_info, timeout)
+            
+            elif command_type == "command_substitution":
+                return await cls._execute_command_substitution(command_info, timeout)
+            
+            elif command_type == "logical_operators":
+                return await cls._execute_logical_operators(command_info, timeout)
+            
+            elif command_type == "heredoc":
+                return await cls._execute_heredoc(command_info, timeout)
+            
+            elif command_type == "shell_command":
+                return await cls._execute_shell_command(command_info, timeout)
             
             else:
                 return {
                     "success": False,
-                    "error": f"不支持的命令格式: {syntax_info['type']}",
+                    "error": f"不支持的命令类型: {command_type}",
                     "output": "",
-                    "command": command
+                    "command": command,
+                    "command_type": command_type
                 }
                 
         except subprocess.TimeoutExpired:
@@ -409,7 +580,7 @@ class KubectlExecutor:
                 "command": command
             }
         except Exception as e:
-            logger.error(f"执行kubectl命令失败: {str(e)}")
+            logger.error(f"执行命令失败: {str(e)}")
             return {
                 "success": False,
                 "error": f"执行失败: {str(e)}",
@@ -418,11 +589,11 @@ class KubectlExecutor:
             }
     
     @classmethod
-    async def _execute_simple_kubectl(cls, kubectl_command: str, timeout: int) -> Dict[str, Any]:
-        """执行简单的kubectl命令"""
+    async def _execute_simple_kubectl(cls, command_info: Dict[str, Any], timeout: int) -> Dict[str, Any]:
+        """执行简单kubectl命令"""
+        kubectl_command = command_info["kubectl_command"]
         full_command = f"kubectl {kubectl_command}"
         
-        # 使用shlex安全解析命令
         try:
             cmd_args = shlex.split(full_command)
         except ValueError as e:
@@ -433,7 +604,6 @@ class KubectlExecutor:
                 "command": full_command
             }
         
-        # 执行命令
         logger.info(f"执行kubectl命令: {full_command}")
         result = subprocess.run(
             cmd_args,
@@ -443,64 +613,116 @@ class KubectlExecutor:
             cwd="/data/workspace"
         )
         
-        if result.returncode == 0:
-            return {
-                "success": True,
-                "output": result.stdout,
-                "error": result.stderr if result.stderr else "",
-                "command": full_command,
-                "return_code": result.returncode
-            }
-        else:
-            return {
-                "success": False,
-                "output": result.stdout,
-                "error": result.stderr or "命令执行失败",
-                "command": full_command,
-                "return_code": result.returncode
-            }
+        return {
+            "success": result.returncode == 0,
+            "output": result.stdout,
+            "error": result.stderr if result.stderr else "",
+            "command": full_command,
+            "return_code": result.returncode,
+            "command_type": "simple_kubectl"
+        }
     
     @classmethod
-    async def _execute_complex_kubectl(cls, syntax_info: Dict[str, Any], timeout: int) -> Dict[str, Any]:
-        """执行复杂的kubectl命令（包含YAML内容）"""
-        kubectl_command = syntax_info["kubectl_command"]
-        yaml_content = syntax_info.get("yaml_content", "")
+    async def _execute_pipeline(cls, command_info: Dict[str, Any], timeout: int) -> Dict[str, Any]:
+        """执行管道命令"""
+        commands = command_info["commands"]
+        original_command = command_info["original_command"]
         
-        if not yaml_content:
-            return {
-                "success": False,
-                "error": "缺少YAML内容",
-                "output": "",
-                "command": f"kubectl {kubectl_command}"
-            }
+        logger.info(f"执行管道命令: {original_command}")
+        
+        # 使用shell执行管道命令
+        result = subprocess.run(
+            original_command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd="/data/workspace"
+        )
+        
+        return {
+            "success": result.returncode == 0,
+            "output": result.stdout,
+            "error": result.stderr if result.stderr else "",
+            "command": original_command,
+            "return_code": result.returncode,
+            "command_type": "pipeline",
+            "pipeline_commands": commands
+        }
+    
+    @classmethod
+    async def _execute_command_substitution(cls, command_info: Dict[str, Any], timeout: int) -> Dict[str, Any]:
+        """执行命令替换"""
+        original_command = command_info["original_command"]
+        
+        logger.info(f"执行命令替换: {original_command}")
+        
+        # 使用shell执行命令替换
+        result = subprocess.run(
+            original_command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd="/data/workspace"
+        )
+        
+        return {
+            "success": result.returncode == 0,
+            "output": result.stdout,
+            "error": result.stderr if result.stderr else "",
+            "command": original_command,
+            "return_code": result.returncode,
+            "command_type": "command_substitution",
+            "sub_commands": command_info["sub_commands"]
+        }
+    
+    @classmethod
+    async def _execute_logical_operators(cls, command_info: Dict[str, Any], timeout: int) -> Dict[str, Any]:
+        """执行逻辑操作符命令"""
+        original_command = command_info["original_command"]
+        operator = command_info["operator"]
+        
+        logger.info(f"执行逻辑操作命令 ({operator}): {original_command}")
+        
+        # 使用shell执行逻辑操作
+        result = subprocess.run(
+            original_command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd="/data/workspace"
+        )
+        
+        return {
+            "success": result.returncode == 0,
+            "output": result.stdout,
+            "error": result.stderr if result.stderr else "",
+            "command": original_command,
+            "return_code": result.returncode,
+            "command_type": "logical_operators",
+            "operator": operator,
+            "commands": command_info["commands"]
+        }
+    
+    @classmethod
+    async def _execute_heredoc(cls, command_info: Dict[str, Any], timeout: int) -> Dict[str, Any]:
+        """执行heredoc命令"""
+        kubectl_command = command_info["kubectl_command"]
+        yaml_content = command_info["yaml_content"]
         
         try:
-            # 创建临时文件存储YAML内容
             import tempfile
             with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_file:
                 temp_file.write(yaml_content)
                 temp_file_path = temp_file.name
             
             try:
-                # 构建kubectl命令，使用临时文件
-                if kubectl_command.endswith('-f -'):
-                    # 将 -f - 替换为 -f temp_file_path
-                    kubectl_command = kubectl_command.replace('-f -', f'-f {temp_file_path}')
-                elif '-f -' in kubectl_command:
-                    kubectl_command = kubectl_command.replace('-f -', f'-f {temp_file_path}')
-                else:
-                    # 如果没有-f参数，添加它
-                    kubectl_command = f"{kubectl_command} -f {temp_file_path}"
-                
-                full_command = f"kubectl {kubectl_command}"
-                
-                # 使用shlex安全解析命令
+                full_command = f"kubectl {kubectl_command.replace('-f -', f'-f {temp_file_path}')}"
                 cmd_args = shlex.split(full_command)
                 
-                # 执行命令
-                logger.info(f"执行复杂kubectl命令: {full_command}")
-                logger.info(f"YAML内容: {yaml_content[:200]}...")
-                
+                logger.info(f"执行heredoc命令: {full_command}")
                 result = subprocess.run(
                     cmd_args,
                     capture_output=True,
@@ -509,41 +731,70 @@ class KubectlExecutor:
                     cwd="/data/workspace"
                 )
                 
-                if result.returncode == 0:
-                    return {
-                        "success": True,
-                        "output": result.stdout,
-                        "error": result.stderr if result.stderr else "",
-                        "command": full_command,
-                        "return_code": result.returncode,
-                        "yaml_content": yaml_content
-                    }
-                else:
-                    return {
-                        "success": False,
-                        "output": result.stdout,
-                        "error": result.stderr or "命令执行失败",
-                        "command": full_command,
-                        "return_code": result.returncode,
-                        "yaml_content": yaml_content
-                    }
-                    
+                return {
+                    "success": result.returncode == 0,
+                    "output": result.stdout,
+                    "error": result.stderr if result.stderr else "",
+                    "command": full_command,
+                    "return_code": result.returncode,
+                    "command_type": "heredoc",
+                    "yaml_content": yaml_content
+                }
+                
             finally:
-                # 清理临时文件
                 try:
                     os.unlink(temp_file_path)
                 except:
                     pass
                     
         except Exception as e:
-            logger.error(f"执行复杂kubectl命令失败: {str(e)}")
             return {
                 "success": False,
-                "error": f"执行失败: {str(e)}",
+                "error": f"执行heredoc失败: {str(e)}",
                 "output": "",
                 "command": f"kubectl {kubectl_command}",
-                "yaml_content": yaml_content
+                "command_type": "heredoc"
             }
+    
+    @classmethod
+    async def _execute_shell_command(cls, command_info: Dict[str, Any], timeout: int) -> Dict[str, Any]:
+        """执行shell命令"""
+        shell_command = command_info["shell_command"]
+        
+        logger.info(f"执行shell命令: {shell_command}")
+        
+        result = subprocess.run(
+            shell_command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd="/data/workspace"
+        )
+        
+        return {
+            "success": result.returncode == 0,
+            "output": result.stdout,
+            "error": result.stderr if result.stderr else "",
+            "command": shell_command,
+            "return_code": result.returncode,
+            "command_type": "shell_command"
+        }
+
+# 为了向后兼容，保留原来的KubectlExecutor类
+class KubectlExecutor(EnhancedKubectlExecutor):
+    """向后兼容的Kubectl执行器"""
+    
+    @classmethod
+    async def execute_kubectl(cls, command: str, timeout: int = 30) -> Dict[str, Any]:
+        """向后兼容的执行方法"""
+        return await cls.execute_command(command, timeout)
+    
+    @classmethod
+    def is_safe_command(cls, command: str) -> tuple[bool, str]:
+        """向后兼容的安全检查方法"""
+        command_info = cls._detect_command_type(command)
+        return cls._analyze_command_safety(command_info)
 
 class OutputFormatter:
     """智能输出格式化器"""
@@ -711,8 +962,7 @@ async def process_query(request: QueryRequest):
                     step_execution_history = []
                     
                     while not step_success and retry_count <= max_retries:
-                        # 执行命令
-                        exec_result = await KubectlExecutor.execute_kubectl(current_command)
+                        exec_result = await EnhancedKubectlExecutor.execute_command(current_command)
                         step_execution_history.append({
                             "attempt": retry_count + 1,
                             "command": current_command,
@@ -721,14 +971,14 @@ async def process_query(request: QueryRequest):
                         
                         if exec_result["success"]:
                             step_success = True
-                            # 格式化成功结果
+                            # 格式化输出
                             formatted_result = OutputFormatter.format_output(
                                 exec_result["command"], 
                                 exec_result["output"], 
                                 output_format
                             )
                         else:
-                            # 命令失败，尝试智能重试
+                            # 步骤失败，尝试智能重试
                             if retry_enabled and retry_count < max_retries:
                                 logger.warning(f"步骤 {i+1} 第 {retry_count + 1} 次尝试失败: {exec_result['error']}")
                                 
@@ -845,7 +1095,7 @@ async def process_query(request: QueryRequest):
                 exec_success = False
                 
                 while not exec_success and retry_count <= max_retries:
-                    exec_result = await KubectlExecutor.execute_kubectl(current_command)
+                    exec_result = await EnhancedKubectlExecutor.execute_command(current_command)
                     execution_history.append({
                         "attempt": retry_count + 1,
                         "command": current_command,
@@ -971,66 +1221,6 @@ async def process_query(request: QueryRequest):
     except Exception as e:
         logger.error(f"处理查询失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"处理查询失败: {str(e)}")
-
-@router.post("/vote")
-async def vote(request: VoteRequest):
-    """
-    处理用户投票请求
-    
-    Args:
-        request: 包含user_id和option的投票请求
-        
-    Returns:
-        Dict: 投票结果
-    """
-    # 定义默认成功返回结构
-    success_response = {"code": 200, "message": "投票成功", "data": {}}
-    
-    try:
-        # 确保请求参数有效
-        if not request or not hasattr(request, 'user_id') or not hasattr(request, 'option'):
-            return {"code": 400, "message": "无效的请求参数", "data": {}}
-            
-        user_id = request.user_id
-        if not user_id:
-            return {"code": 400, "message": "用户ID不能为空", "data": {}}
-            
-        option = request.option.upper() if request.option else ""  # 转为大写以统一处理
-        if not option:
-            return {"code": 400, "message": "投票选项不能为空", "data": {}}
-        
-        # 验证选项是否有效
-        if option not in vote_data:
-            return {"code": 400, "message": f"无效的投票选项: {option}，有效选项为 A/B/C/D/E", "data": {}}
-        
-        # 使用线程锁确保并发安全
-        try:
-            with vote_lock:
-                # 记录投票
-                vote_data[option] += 1
-                vote_users.add(user_id)
-                
-                # 返回当前投票情况
-                result = vote_data.copy()
-            
-            # 投票成功
-            return {"code": 200, "message": "投票成功", "data": {"votes": result}}
-        except Exception as e:
-            # 锁操作失败，记录错误
-            logger.error(f"投票锁操作失败: {str(e)}")
-            # 返回成功以防止重试风暴，因为可能实际上已经投票成功
-            return success_response
-            
-    except ValueError as e:
-        # 处理值错误
-        logger.error(f"投票值错误: {str(e)}")
-        return {"code": 400, "message": f"投票请求格式错误: {str(e)}", "data": {}}
-        
-    except Exception as e:
-        # 记录详细的错误信息到日志，但对外返回简洁的错误
-        logger.error(f"投票处理失败: {str(e)}")
-        # 由于可能已经投票成功或失败不明确，返回成功以避免用户重试
-        return success_response
 
 async def execute_tool(tool_name: str, parameters: Dict[str, Any]) -> str:
     """
@@ -1412,17 +1602,29 @@ async def get_security_config():
         
         # 添加默认配置信息
         default_config = {
-            "default_dangerous_commands": KubectlExecutor._get_dangerous_commands(),
-            "default_safe_commands": KubectlExecutor._get_safe_commands(),
-            "default_safe_create_resources": KubectlExecutor._get_safe_create_resources(),
-            "default_safe_apply_resources": KubectlExecutor._get_safe_apply_resources(),
-            "default_safe_scale_resources": KubectlExecutor._get_safe_scale_resources()
+            "default_dangerous_commands": list(Config.get_dangerous_commands()),
+            "default_safe_commands": list(Config.get_safe_commands()),
+            "default_safe_create_resources": list(Config.get_safe_create_resources()),
+            "default_safe_apply_resources": list(Config.get_safe_apply_resources()),
+            "default_safe_scale_resources": list(Config.get_safe_scale_resources())
         }
         
         return {
             "success": True,
-            "current_config": config,
-            "default_config": default_config
+            "data": {
+                "current_config": config,
+                "default_config": default_config,
+                "description": {
+                    "super_admin_mode": "超级管理员模式，启用后允许执行所有命令",
+                    "allow_shell_commands": "是否允许执行shell命令组合（管道、命令替换等）",
+                    "custom_dangerous_commands": "用户自定义的危险命令列表",
+                    "custom_safe_create_resources": "用户自定义的安全创建资源类型",
+                    "custom_safe_apply_resources": "用户自定义的安全应用资源类型",
+                    "custom_safe_scale_resources": "用户自定义的安全扩缩容资源类型",
+                    "safe_shell_commands": "允许的安全shell命令",
+                    "dangerous_shell_commands": "禁止的危险shell命令"
+                }
+            }
         }
     except Exception as e:
         logger.error(f"获取安全配置失败: {str(e)}")
@@ -1432,50 +1634,61 @@ async def get_security_config():
 async def update_security_config(request: SecurityConfigRequest):
     """更新安全配置"""
     try:
+        updated_fields = []
+        
         # 更新超级管理员模式
         if request.super_admin_mode is not None:
             if request.super_admin_mode:
                 security_config.enable_super_admin_mode()
+                updated_fields.append("启用超级管理员模式")
             else:
                 security_config.disable_super_admin_mode()
+                updated_fields.append("禁用超级管理员模式")
+        
+        # 更新shell命令支持
+        if request.allow_shell_commands is not None:
+            if request.allow_shell_commands:
+                security_config.enable_shell_commands()
+                updated_fields.append("启用shell命令支持")
+            else:
+                security_config.disable_shell_commands()
+                updated_fields.append("禁用shell命令支持")
         
         # 更新危险命令列表
         if request.dangerous_commands is not None:
             # 清空现有自定义危险命令
-            config = security_config.get_config()
-            for cmd in config["custom_dangerous_commands"]:
-                security_config.remove_dangerous_command(cmd)
+            security_config.custom_dangerous_commands.clear()
             # 添加新的危险命令
             for cmd in request.dangerous_commands:
                 security_config.add_dangerous_command(cmd)
+            updated_fields.append(f"更新危险命令列表({len(request.dangerous_commands)}个)")
         
-        # 更新安全创建资源列表
+        # 更新安全资源列表
         if request.safe_create_resources is not None:
-            config = security_config.get_config()
-            for resource in config["custom_safe_create_resources"]:
-                security_config.remove_safe_resource(resource, 'create')
+            security_config.custom_safe_create_resources.clear()
             for resource in request.safe_create_resources:
                 security_config.add_safe_resource(resource, 'create')
+            updated_fields.append(f"更新安全创建资源列表({len(request.safe_create_resources)}个)")
         
-        # 更新安全apply资源列表
         if request.safe_apply_resources is not None:
-            config = security_config.get_config()
-            for resource in config["custom_safe_apply_resources"]:
-                security_config.remove_safe_resource(resource, 'apply')
+            security_config.custom_safe_apply_resources.clear()
             for resource in request.safe_apply_resources:
                 security_config.add_safe_resource(resource, 'apply')
+            updated_fields.append(f"更新安全应用资源列表({len(request.safe_apply_resources)}个)")
         
-        # 更新安全scale资源列表
         if request.safe_scale_resources is not None:
-            config = security_config.get_config()
-            for resource in config["custom_safe_scale_resources"]:
-                security_config.remove_safe_resource(resource, 'scale')
+            security_config.custom_safe_scale_resources.clear()
             for resource in request.safe_scale_resources:
                 security_config.add_safe_resource(resource, 'scale')
+            updated_fields.append(f"更新安全扩缩容资源列表({len(request.safe_scale_resources)}个)")
+        
+        # 记录配置更新
+        logger.info(f"安全配置已更新: {', '.join(updated_fields)}")
         
         return {
             "success": True,
-            "message": "安全配置更新成功",
+            "message": f"安全配置更新成功: {', '.join(updated_fields)}",
+            "updated_fields": updated_fields,
             "current_config": security_config.get_config()
         }
         
@@ -1483,15 +1696,51 @@ async def update_security_config(request: SecurityConfigRequest):
         logger.error(f"更新安全配置失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"更新安全配置失败: {str(e)}")
 
+@router.post("/security/shell-commands/enable")
+async def enable_shell_commands():
+    """启用shell命令支持"""
+    try:
+        security_config.enable_shell_commands()
+        logger.info("Shell命令支持已启用")
+        
+        return {
+            "success": True,
+            "message": "Shell命令支持已启用",
+            "warning": "启用shell命令支持可能带来安全风险，请确保您了解相关风险",
+            "current_config": security_config.get_config()
+        }
+    except Exception as e:
+        logger.error(f"启用shell命令支持失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"启用shell命令支持失败: {str(e)}")
+
+@router.post("/security/shell-commands/disable")
+async def disable_shell_commands():
+    """禁用shell命令支持"""
+    try:
+        security_config.disable_shell_commands()
+        logger.info("Shell命令支持已禁用")
+        
+        return {
+            "success": True,
+            "message": "Shell命令支持已禁用，现在只允许纯kubectl命令",
+            "current_config": security_config.get_config()
+        }
+    except Exception as e:
+        logger.error(f"禁用shell命令支持失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"禁用shell命令支持失败: {str(e)}")
+
 @router.post("/security/super-admin/enable")
 async def enable_super_admin():
     """启用超级管理员模式"""
     try:
         security_config.enable_super_admin_mode()
+        logger.warning("超级管理员模式已启用 - 所有命令都将被允许执行")
+        
         return {
             "success": True,
             "message": "超级管理员模式已启用",
-            "super_admin_mode": True
+            "warning": "超级管理员模式下所有命令都将被允许执行，包括危险操作！请谨慎使用。",
+            "current_config": security_config.get_config()
         }
     except Exception as e:
         logger.error(f"启用超级管理员模式失败: {str(e)}")
@@ -1502,10 +1751,12 @@ async def disable_super_admin():
     """禁用超级管理员模式"""
     try:
         security_config.disable_super_admin_mode()
+        logger.info("超级管理员模式已禁用")
+        
         return {
             "success": True,
-            "message": "超级管理员模式已禁用",
-            "super_admin_mode": False
+            "message": "超级管理员模式已禁用，恢复正常安全检查",
+            "current_config": security_config.get_config()
         }
     except Exception as e:
         logger.error(f"禁用超级管理员模式失败: {str(e)}")
@@ -1515,30 +1766,205 @@ async def disable_super_admin():
 async def reset_security_config():
     """重置安全配置到默认状态"""
     try:
-        # 禁用超级管理员模式
+        # 重置所有配置
         security_config.disable_super_admin_mode()
+        security_config.disable_shell_commands()
+        security_config.custom_dangerous_commands.clear()
+        security_config.custom_safe_commands.clear()
+        security_config.custom_safe_create_resources.clear()
+        security_config.custom_safe_apply_resources.clear()
+        security_config.custom_safe_scale_resources.clear()
         
-        # 清空所有自定义配置
-        config = security_config.get_config()
-        
-        # 清空自定义危险命令
-        for cmd in config["custom_dangerous_commands"]:
-            security_config.remove_dangerous_command(cmd)
-        
-        # 清空自定义安全资源
-        for resource in config["custom_safe_create_resources"]:
-            security_config.remove_safe_resource(resource, 'create')
-        for resource in config["custom_safe_apply_resources"]:
-            security_config.remove_safe_resource(resource, 'apply')
-        for resource in config["custom_safe_scale_resources"]:
-            security_config.remove_safe_resource(resource, 'scale')
+        logger.info("安全配置已重置到默认状态")
         
         return {
             "success": True,
             "message": "安全配置已重置到默认状态",
             "current_config": security_config.get_config()
         }
-        
     except Exception as e:
         logger.error(f"重置安全配置失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"重置安全配置失败: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"重置安全配置失败: {str(e)}")
+
+@router.post("/test-command")
+async def test_command(command: str = Body(..., embed=True)):
+    """测试命令安全性和执行能力"""
+    try:
+        # 解析命令
+        command_info = EnhancedKubectlExecutor._detect_command_type(command)
+        
+        # 安全检查
+        is_safe, warning = EnhancedKubectlExecutor._analyze_command_safety(command_info)
+        
+        result = {
+            "command": command,
+            "command_type": command_info.get("type", "unknown"),
+            "is_safe": is_safe,
+            "safety_message": warning if not is_safe else "命令通过安全检查",
+            "command_analysis": command_info
+        }
+        
+        # 如果命令安全，可以选择执行（但这里只做分析）
+        if is_safe:
+            result["execution_ready"] = True
+            result["message"] = "命令可以安全执行"
+        else:
+            result["execution_ready"] = False
+            result["message"] = f"命令被安全策略阻止: {warning}"
+        
+        return {
+            "success": True,
+            "data": result
+        }
+        
+    except Exception as e:
+        logger.error(f"测试命令失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"测试命令失败: {str(e)}")
+
+@router.post("/shell/execute")
+async def execute_shell_command(request: ShellCommandRequest):
+    """
+    执行shell命令
+    
+    Args:
+        request: shell命令请求
+        
+    Returns:
+        Dict: 执行结果
+    """
+    try:
+        command = request.command.strip()
+        timeout = request.timeout or 30
+        
+        if not command:
+            raise HTTPException(status_code=400, detail="命令不能为空")
+        
+        # 使用增强版执行器执行命令
+        result = await EnhancedKubectlExecutor.execute_command(command, timeout)
+        
+        # 格式化输出
+        if result["success"]:
+            formatted_result = OutputFormatter.format_output(
+                result["command"], 
+                result["output"], 
+                "auto"
+            )
+        else:
+            formatted_result = {
+                "type": "error",
+                "command": result["command"],
+                "error": result["error"],
+                "content": result.get("output", "")
+            }
+        
+        return {
+            "success": result["success"],
+            "command": result["command"],
+            "command_type": result.get("command_type", "unknown"),
+            "output": result["output"],
+            "error": result.get("error", ""),
+            "return_code": result.get("return_code", -1),
+            "formatted_result": formatted_result,
+            "execution_time": timeout
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"执行shell命令失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"执行shell命令失败: {str(e)}")
+
+@router.get("/shell/status")
+async def get_shell_status():
+    """获取shell命令执行状态和配置"""
+    try:
+        config = security_config.get_config()
+        
+        return {
+            "success": True,
+            "data": {
+                "shell_commands_enabled": config["allow_shell_commands"],
+                "super_admin_mode": config["super_admin_mode"],
+                "safe_shell_commands": config["safe_shell_commands"],
+                "dangerous_shell_commands": config["dangerous_shell_commands"],
+                "supported_features": {
+                    "command_substitution": "支持 $(command) 语法",
+                    "pipelines": "支持 | 管道操作",
+                    "logical_operators": "支持 && || ; 逻辑操作符",
+                    "kubectl_integration": "完整kubectl命令支持",
+                    "safety_checks": "智能安全检查"
+                },
+                "examples": [
+                    "kubectl get pods",
+                    "kubectl get namespaces | grep '^a'",
+                    "kubectl get pods $(kubectl get namespaces -o name | head -1 | cut -d'/' -f2)",
+                    "kubectl get nodes && kubectl get pods --all-namespaces"
+                ]
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"获取shell状态失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取shell状态失败: {str(e)}")
+
+@router.post("/shell/validate")
+async def validate_shell_command(command: str = Body(..., embed=True)):
+    """验证shell命令的安全性和语法"""
+    try:
+        if not command or not command.strip():
+            raise HTTPException(status_code=400, detail="命令不能为空")
+        
+        command = command.strip()
+        
+        # 解析命令
+        command_info = EnhancedKubectlExecutor._detect_command_type(command)
+        
+        # 安全检查
+        is_safe, warning = EnhancedKubectlExecutor._analyze_command_safety(command_info)
+        
+        # 语法分析
+        syntax_analysis = {
+            "command_type": command_info.get("type", "unknown"),
+            "complexity": "simple" if command_info.get("type") in ["simple_kubectl", "shell_command"] else "complex",
+            "features_used": []
+        }
+        
+        # 分析使用的功能
+        if command_info.get("type") == "pipeline":
+            syntax_analysis["features_used"].append("管道操作")
+        if command_info.get("type") == "command_substitution":
+            syntax_analysis["features_used"].append("命令替换")
+        if command_info.get("type") == "logical_operators":
+            syntax_analysis["features_used"].append("逻辑操作符")
+        if "kubectl" in command.lower():
+            syntax_analysis["features_used"].append("kubectl命令")
+        
+        return {
+            "success": True,
+            "data": {
+                "command": command,
+                "is_valid": True,
+                "is_safe": is_safe,
+                "safety_message": warning if not is_safe else "命令通过安全检查",
+                "syntax_analysis": syntax_analysis,
+                "command_info": command_info,
+                "can_execute": is_safe,
+                "recommendations": [
+                    "建议在测试环境中先验证命令效果" if not is_safe else "命令可以安全执行",
+                    "复杂命令建议分步执行以便调试" if syntax_analysis["complexity"] == "complex" else None
+                ]
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"验证shell命令失败: {str(e)}")
+        return {
+            "success": False,
+            "data": {
+                "command": command,
+                "is_valid": False,
+                "is_safe": False,
+                "error": str(e),
+                "can_execute": False
+            }
+        } 
