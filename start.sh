@@ -28,6 +28,28 @@ print_error() {
     echo -e "${RED}[错误]${NC} $1"
 }
 
+# 检查Python命令
+check_python() {
+    if command -v python3 &> /dev/null; then
+        PYTHON_CMD="python3"
+    elif command -v python &> /dev/null; then
+        # 检查python版本是否为3.x
+        if python -c "import sys; sys.exit(0 if sys.version_info.major == 3 else 1)" 2>/dev/null; then
+            PYTHON_CMD="python"
+        else
+            print_error "找到python命令但版本不是Python 3"
+            return 1
+        fi
+    else
+        print_error "未找到Python 3！请安装Python 3.9或更高版本"
+        print_info "Ubuntu/Debian: sudo apt-get install python3"
+        print_info "CentOS/RHEL: sudo yum install python3"
+        return 1
+    fi
+    print_success "找到Python命令: $PYTHON_CMD"
+    return 0
+}
+
 # 检查并安装yq工具（用于处理YAML）
 check_yq() {
     if ! command -v yq &> /dev/null; then
@@ -50,7 +72,7 @@ check_yq() {
 # 从config.yml读取配置的Python脚本
 read_config_value() {
     local key=$1
-    python3 -c "
+    $PYTHON_CMD -c "
 import yaml
 import sys
 try:
@@ -81,6 +103,12 @@ echo "=================================================="
 echo "        K8Helper - Kubernetes助手启动脚本           "
 echo "=================================================="
 echo ""
+
+# 检查Python环境
+print_info "检查Python环境..."
+if ! check_python; then
+    exit 1
+fi
 
 # 检查config.yml文件是否存在
 if [ ! -f "config.yml" ]; then
@@ -139,7 +167,7 @@ fi
 print_info "激活虚拟环境..."
 if [ ! -d "venv" ]; then
     print_info "虚拟环境不存在，正在创建..."
-    python3 -m venv venv
+    $PYTHON_CMD -m venv venv
 fi
 
 source venv/bin/activate
@@ -216,4 +244,4 @@ else
     RELOAD_FLAG=""
 fi
 
-python -m uvicorn src.main:app $RELOAD_FLAG --host $HOST --port $PORT 
+$PYTHON_CMD -m uvicorn src.main:app $RELOAD_FLAG --host $HOST --port $PORT 
