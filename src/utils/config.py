@@ -220,7 +220,7 @@ class Config:
             return True
         except Exception as e:
             raise ValueError(f"配置验证失败: {str(e)}")
-    
+            
     @classmethod
     def get_k8s_config(cls):
         """获取Kubernetes配置"""
@@ -244,10 +244,15 @@ class Config:
         return {
             "api_key": cls.HUNYUAN_API_KEY,
             "secret_key": cls.HUNYUAN_SECRET_KEY
-        }
+        } 
     
     @classmethod
     def set_config_file_path(cls, path: str):
         """设置配置文件路径"""
         cls._config_file_path = Path(path)
         cls._config_data = None  # 重置配置数据以便重新加载 
+
+    @classmethod
+    def get(cls, key_path: str, default=None):
+        """通用配置读取接口，等价于 _get_config_value"""
+        return cls._get_config_value(key_path, default) 

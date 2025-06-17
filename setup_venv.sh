@@ -36,8 +36,36 @@ echo ""
 
 # 检查python3是否存在
 if ! command -v python3 &> /dev/null; then
-    print_error "未找到python3，请先安装Python 3"
-    exit 1
+    print_warning "未检测到python3，尝试自动安装Python 3.10..."
+
+    install_success=false
+    # 检测包管理器并安装
+    if command -v apt-get &> /dev/null; then
+        print_info "使用 apt 安装 Python 3.10"
+        sudo apt-get update && sudo apt-get install -y python3.10 python3.10-venv python3.10-distutils && \
+        sudo ln -sf $(which python3.10) /usr/bin/python3 && install_success=true
+    elif command -v yum &> /dev/null; then
+        print_info "使用 yum 安装 Python 3.10"
+        sudo yum install -y python3.10 && \
+        sudo ln -sf $(which python3.10) /usr/bin/python3 && install_success=true
+    elif command -v dnf &> /dev/null; then
+        print_info "使用 dnf 安装 Python 3.10"
+        sudo dnf install -y python3.10 && \
+        sudo ln -sf $(which python3.10) /usr/bin/python3 && install_success=true
+    elif command -v brew &> /dev/null; then
+        print_info "使用 brew 安装 Python 3.10"
+        brew install python@3.10 && \
+        ln -sf $(brew --prefix)/opt/python@3.10/bin/python3 /usr/local/bin/python3 && install_success=true
+    else
+        print_error "无法自动识别包管理器，请手动安装Python 3.10"
+    fi
+
+    if ! $install_success; then
+        print_error "自动安装Python 3.10失败，请手动安装后重新运行脚本"
+        exit 1
+    fi
+
+    print_success "Python 3.10 安装完成"
 fi
 
 # 检查当前Python版本
@@ -82,7 +110,7 @@ print_info "安装项目依赖..."
 pip install -r requirements.txt
 if [ $? -ne 0 ]; then
     print_warning "依赖安装过程中出现错误，尝试安装核心依赖..."
-    pip install fastapi uvicorn kubernetes python-dotenv
+    pip install fastapi uvicorn kubernetes python-dotenv pyyaml
     pip install tencentcloud-sdk-python-hunyuan
     pip install openai
     if [ $? -ne 0 ]; then
@@ -94,16 +122,26 @@ else
     print_success "所有依赖安装完成"
 fi
 
-# 创建.env文件（如果不存在）
-if [ ! -f ".env" ]; then
-    print_info "创建默认的.env文件..."
-    cat > .env << EOF
-TENCENT_SECRET_ID=your_secret_id
-TENCENT_SECRET_KEY=your_secret_key
-EOF
-    print_success ".env文件创建成功，请在使用前更新实际的密钥"
+# 检查配置文件
+if [ ! -f "config.yml" ]; then
+    print_warning "未找到config.yml配置文件"
+    print_info "请确保config.yml文件存在并包含正确的配置"
+    print_info "配置文件应包含API密钥、服务端口等必要配置"
 else
-    print_info "检测到已存在的.env文件，跳过创建"
+    print_success "检测到config.yml配置文件"
+    
+    # 检查配置文件中的关键配置
+    if grep -q "secret_id:" config.yml && grep -q "secret_key:" config.yml; then
+        print_success "配置文件包含必要的API密钥配置"
+else
+        print_warning "配置文件中可能缺少API密钥配置，请检查config.yml文件"
+    fi
+fi
+
+# 检查并提醒旧的.env文件
+if [ -f ".env" ]; then
+    print_warning "检测到旧的.env文件，配置已迁移到config.yml"
+    print_info "建议删除.env文件，应用将使用config.yml中的配置"
 fi
 
 echo ""
@@ -116,4 +154,8 @@ echo "  3. 退出虚拟环境：deactivate"
 echo ""
 print_info "或直接使用启动脚本："
 echo "  ./start.sh [端口号]"
+echo ""
+print_info "配置文件："
+echo "  应用使用config.yml作为配置文件"
+echo "  请确保其中包含正确的API密钥和其他配置"
 echo "" 

@@ -619,26 +619,26 @@ function updateSecurityUI(data) {
     try {
         console.log('开始更新安全设置UI，数据:', data);
         
-        const config = data.current_config;
-        const defaultConfig = data.default_config;
+    const config = data.current_config;
+    const defaultConfig = data.default_config;
         
         if (!config) {
             throw new Error('当前配置数据为空');
         }
-        
-        // 更新超级管理员模式状态
-        const toggle = document.getElementById('super-admin-toggle');
-        const status = document.getElementById('super-admin-status');
-        
+    
+    // 更新超级管理员模式状态
+    const toggle = document.getElementById('super-admin-toggle');
+    const status = document.getElementById('super-admin-status');
+    
         if (toggle && status) {
-            toggle.checked = config.super_admin_mode;
-            if (config.super_admin_mode) {
-                status.textContent = '已启用';
-                status.className = 'enabled';
-            } else {
-                status.textContent = '已禁用';
-                status.className = 'disabled';
-            }
+    toggle.checked = config.super_admin_mode;
+    if (config.super_admin_mode) {
+        status.textContent = '已启用';
+        status.className = 'enabled';
+    } else {
+        status.textContent = '已禁用';
+        status.className = 'disabled';
+    }
             console.log('超级管理员状态更新完成:', config.super_admin_mode);
         }
         
@@ -657,39 +657,39 @@ function updateSecurityUI(data) {
             }
             console.log('Shell命令状态更新完成:', config.allow_shell_commands);
         }
-        
+    
         // 更新标签显示（添加错误处理）
         try {
-            updateTags('dangerous-commands-tags', config.custom_dangerous_commands, defaultConfig.default_dangerous_commands);
+    updateTags('dangerous-commands-tags', config.custom_dangerous_commands, defaultConfig.default_dangerous_commands);
             console.log('危险命令标签更新完成');
         } catch (e) {
             console.warn('更新危险命令标签失败:', e);
         }
         
         try {
-            updateTags('safe-create-tags', config.custom_safe_create_resources, defaultConfig.default_safe_create_resources);
+    updateTags('safe-create-tags', config.custom_safe_create_resources, defaultConfig.default_safe_create_resources);
             console.log('安全创建资源标签更新完成');
         } catch (e) {
             console.warn('更新安全创建资源标签失败:', e);
         }
         
         try {
-            updateTags('safe-apply-tags', config.custom_safe_apply_resources, defaultConfig.default_safe_apply_resources);
+    updateTags('safe-apply-tags', config.custom_safe_apply_resources, defaultConfig.default_safe_apply_resources);
             console.log('安全应用资源标签更新完成');
         } catch (e) {
             console.warn('更新安全应用资源标签失败:', e);
         }
         
         try {
-            updateTags('safe-scale-tags', config.custom_safe_scale_resources, defaultConfig.default_safe_scale_resources);
+    updateTags('safe-scale-tags', config.custom_safe_scale_resources, defaultConfig.default_safe_scale_resources);
             console.log('安全扩缩容资源标签更新完成');
         } catch (e) {
             console.warn('更新安全扩缩容资源标签失败:', e);
         }
-        
-        // 更新配置显示
+    
+    // 更新配置显示
         try {
-            updateConfigDisplay(config, defaultConfig);
+    updateConfigDisplay(config, defaultConfig);
             console.log('配置显示更新完成');
         } catch (e) {
             console.warn('更新配置显示失败:', e);
@@ -733,8 +733,8 @@ function updateTags(containerId, customItems, defaultItems) {
     // 显示默认项目（不可删除）
     safeDefaultItems.forEach(item => {
         try {
-            const tag = createTag(item, true);
-            container.appendChild(tag);
+        const tag = createTag(item, true);
+        container.appendChild(tag);
         } catch (e) {
             console.warn(`创建默认标签失败: ${item}`, e);
         }
@@ -743,8 +743,8 @@ function updateTags(containerId, customItems, defaultItems) {
     // 显示自定义项目（可删除）
     safeCustomItems.forEach(item => {
         try {
-            const tag = createTag(item, false);
-            container.appendChild(tag);
+        const tag = createTag(item, false);
+        container.appendChild(tag);
         } catch (e) {
             console.warn(`创建自定义标签失败: ${item}`, e);
         }
@@ -796,20 +796,20 @@ function setupTagInputs() {
     inputs.forEach(({ id, config, container }) => {
         const input = document.getElementById(id);
         if (input) {
-            input.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    const value = this.value.trim();
+        input.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                const value = this.value.trim();
                     if (value && securityConfig[config] && !securityConfig[config].includes(value)) {
-                        securityConfig[config].push(value);
-                        const containerEl = document.getElementById(container);
+                    securityConfig[config].push(value);
+                    const containerEl = document.getElementById(container);
                         if (containerEl) {
-                            const tag = createTag(value, false);
-                            containerEl.appendChild(tag);
+                    const tag = createTag(value, false);
+                    containerEl.appendChild(tag);
                         }
-                        this.value = '';
-                    }
+                    this.value = '';
                 }
-            });
+            }
+        });
         } else {
             console.warn(`标签输入框 ${id} 不存在`);
         }
@@ -957,11 +957,11 @@ function updateConfigDisplay(config, defaultConfig) {
                 }
             }).filter(tag => tag).join('');
         }
-        
-        const html = `
-            <div class="config-item">
-                <h5>🔧 超级管理员模式</h5>
-                <div class="config-list">
+    
+    const html = `
+        <div class="config-item">
+            <h5>🔧 超级管理员模式</h5>
+            <div class="config-list">
                     <span class="config-tag ${safeConfig.super_admin_mode ? 'active' : ''}">${safeConfig.super_admin_mode ? '已启用' : '已禁用'}</span>
                 </div>
             </div>
@@ -970,43 +970,43 @@ function updateConfigDisplay(config, defaultConfig) {
                 <h5>💻 Shell命令支持</h5>
                 <div class="config-list">
                     <span class="config-tag ${safeConfig.allow_shell_commands ? 'active' : ''}">${safeConfig.allow_shell_commands ? '已启用' : '已禁用'}</span>
-                </div>
             </div>
-            
-            <div class="config-item">
-                <h5>🚫 危险命令 (默认 + 自定义)</h5>
-                <div class="config-list">
+        </div>
+        
+        <div class="config-item">
+            <h5>🚫 危险命令 (默认 + 自定义)</h5>
+            <div class="config-list">
                     ${safeArrayToTags(safeDefaultConfig.default_dangerous_commands)}
                     ${safeArrayToTags(safeConfig.custom_dangerous_commands, 'config-tag active')}
-                </div>
             </div>
-            
-            <div class="config-item">
-                <h5>✅ 允许创建的资源 (默认 + 自定义)</h5>
-                <div class="config-list">
+        </div>
+        
+        <div class="config-item">
+            <h5>✅ 允许创建的资源 (默认 + 自定义)</h5>
+            <div class="config-list">
                     ${safeArrayToTags(safeDefaultConfig.default_safe_create_resources)}
                     ${safeArrayToTags(safeConfig.custom_safe_create_resources, 'config-tag active')}
-                </div>
             </div>
-            
-            <div class="config-item">
-                <h5>📝 允许Apply的资源 (默认 + 自定义)</h5>
-                <div class="config-list">
+        </div>
+        
+        <div class="config-item">
+            <h5>📝 允许Apply的资源 (默认 + 自定义)</h5>
+            <div class="config-list">
                     ${safeArrayToTags(safeDefaultConfig.default_safe_apply_resources)}
                     ${safeArrayToTags(safeConfig.custom_safe_apply_resources, 'config-tag active')}
-                </div>
             </div>
-            
-            <div class="config-item">
-                <h5>📏 允许扩缩容的资源 (默认 + 自定义)</h5>
-                <div class="config-list">
+        </div>
+        
+        <div class="config-item">
+            <h5>📏 允许扩缩容的资源 (默认 + 自定义)</h5>
+            <div class="config-list">
                     ${safeArrayToTags(safeDefaultConfig.default_safe_scale_resources)}
                     ${safeArrayToTags(safeConfig.custom_safe_scale_resources, 'config-tag active')}
-                </div>
             </div>
-        `;
-        
-        display.innerHTML = html;
+        </div>
+    `;
+    
+    display.innerHTML = html;
         console.log('配置显示更新成功');
     } catch (error) {
         console.error('更新配置显示失败:', error);
@@ -1018,10 +1018,10 @@ function updateConfigDisplay(config, defaultConfig) {
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
     try {
-        // 设置标签输入
-        setupTagInputs();
-        
-        // 超级管理员开关事件
+    // 设置标签输入
+    setupTagInputs();
+    
+    // 超级管理员开关事件
         const superAdminToggle = document.getElementById('super-admin-toggle');
         if (superAdminToggle) {
             superAdminToggle.addEventListener('change', toggleSuperAdmin);
@@ -1032,20 +1032,20 @@ document.addEventListener('DOMContentLoaded', function() {
         if (shellCommandsToggle) {
             shellCommandsToggle.addEventListener('change', toggleShellCommands);
         }
-        
-        // 保存配置按钮事件
+    
+    // 保存配置按钮事件
         const saveConfigBtn = document.getElementById('save-config-btn');
         if (saveConfigBtn) {
             saveConfigBtn.addEventListener('click', saveSecurityConfig);
         }
-        
-        // 重置配置按钮事件
+    
+    // 重置配置按钮事件
         const resetConfigBtn = document.getElementById('reset-config-btn');
         if (resetConfigBtn) {
             resetConfigBtn.addEventListener('click', resetSecurityConfig);
         }
-        
-        // 刷新配置按钮事件
+    
+    // 刷新配置按钮事件
         const refreshConfigBtn = document.getElementById('refresh-config-btn');
         if (refreshConfigBtn) {
             refreshConfigBtn.addEventListener('click', loadSecurityConfig);
@@ -2100,4 +2100,342 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 新增：初始化系统配置页面
     initConfigTab();
-}); 
+});
+
+// 智能Shell命令执行功能
+async function executeSmartShellCommand() {
+    const query = document.getElementById('shell-command-input').value.trim();
+    const timeout = parseInt(document.getElementById('shell-timeout').value);
+    const executeBtn = document.getElementById('execute-shell-btn');
+    const smartExecuteBtn = document.getElementById('smart-execute-shell-btn');
+    const executionResult = document.getElementById('shell-execution-result');
+    const executionContent = document.getElementById('execution-content');
+    const executionCommand = document.getElementById('execution-command');
+    const executionStatus = document.getElementById('execution-status');
+    
+    if (!query) {
+        alert('请输入要执行的操作描述');
+        return;
+    }
+    
+    // 禁用所有执行按钮
+    const originalText = smartExecuteBtn.textContent;
+    smartExecuteBtn.textContent = '🤖 AI分析中...';
+    smartExecuteBtn.disabled = true;
+    executeBtn.disabled = true;
+    
+    executionResult.style.display = 'block';
+    executionCommand.textContent = query;
+    executionStatus.textContent = 'AI正在分析并生成命令...';
+    executionContent.innerHTML = '<div class="loading">🤖 AI正在理解您的需求并生成相应的Shell命令...</div>';
+    
+    try {
+        const response = await fetch('/api/v1/shell/smart', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                command: query,
+                timeout: timeout
+            })
+        });
+        
+        const data = await response.json();
+        displaySmartExecutionResult(data);
+        
+    } catch (error) {
+        executionStatus.textContent = '智能执行失败';
+        executionContent.innerHTML = `<div class="error">智能执行失败: ${error.message}</div>`;
+    } finally {
+        smartExecuteBtn.textContent = originalText;
+        smartExecuteBtn.disabled = false;
+        executeBtn.disabled = false;
+    }
+}
+
+async function analyzeShellQuery() {
+    const query = document.getElementById('shell-command-input').value.trim();
+    const analyzeBtn = document.getElementById('analyze-shell-btn');
+    const analysisResult = document.getElementById('shell-analysis-result');
+    const analysisContent = document.getElementById('analysis-content');
+    
+    if (!query) {
+        alert('请输入要分析的操作描述');
+        return;
+    }
+    
+    const originalText = analyzeBtn.textContent;
+    analyzeBtn.textContent = '🤖 分析中...';
+    analyzeBtn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/v1/shell/analyze', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                command: query
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            displayShellAnalysisResult(data);
+            analysisResult.style.display = 'block';
+        } else {
+            analysisContent.innerHTML = `<div class="error">分析失败: ${data.error || '未知错误'}</div>`;
+            analysisResult.style.display = 'block';
+        }
+        
+    } catch (error) {
+        analysisContent.innerHTML = `<div class="error">分析失败: ${error.message}</div>`;
+        analysisResult.style.display = 'block';
+    } finally {
+        analyzeBtn.textContent = originalText;
+        analyzeBtn.disabled = false;
+    }
+}
+
+function displayShellAnalysisResult(data) {
+    const analysisContent = document.getElementById('analysis-content');
+    
+    const safetyClass = data.safety_check.is_safe ? 'safe' : 'unsafe';
+    const safetyIcon = data.safety_check.is_safe ? '✅' : '❌';
+    const canExecuteIcon = data.can_execute ? '▶️' : '🚫';
+    
+    let html = `
+        <div class="smart-analysis-summary">
+            <div class="analysis-header">
+                <h4>🤖 AI分析结果</h4>
+            </div>
+            
+            <div class="analysis-item">
+                <span class="analysis-label">用户需求:</span>
+                <span class="analysis-value">${escapeHtml(data.query)}</span>
+            </div>
+            
+            <div class="analysis-item">
+                <span class="analysis-label">AI理解:</span>
+                <span class="analysis-value">${escapeHtml(data.ai_analysis)}</span>
+            </div>
+            
+            <div class="analysis-item">
+                <span class="analysis-label">生成命令:</span>
+                <span class="analysis-value command-preview">${escapeHtml(data.generated_command)}</span>
+            </div>
+            
+            <div class="analysis-item">
+                <span class="analysis-label">命令说明:</span>
+                <span class="analysis-value">${escapeHtml(data.command_explanation)}</span>
+            </div>
+            
+            <div class="analysis-item">
+                <span class="analysis-label">执行类型:</span>
+                <span class="analysis-value">${data.execution_type === 'multi_step' ? '多步执行' : '单步执行'}</span>
+            </div>
+            
+            <div class="analysis-item">
+                <span class="analysis-label">安全检查:</span>
+                <span class="analysis-value ${safetyClass}">${safetyIcon} ${data.safety_check.warning || '命令安全'}</span>
+            </div>
+            
+            <div class="analysis-item">
+                <span class="analysis-label">可执行性:</span>
+                <span class="analysis-value">${canExecuteIcon} ${data.can_execute ? '可以执行' : '无法执行'}</span>
+            </div>
+        </div>
+    `;
+    
+    if (data.steps && data.steps.length > 1) {
+        html += `
+            <div class="analysis-steps">
+                <h4>执行步骤:</h4>
+                <ol class="step-list">
+                    ${data.steps.map((step, index) => `
+                        <li class="step-item">
+                            <code>${escapeHtml(step)}</code>
+                        </li>
+                    `).join('')}
+                </ol>
+            </div>
+        `;
+    }
+    
+    if (data.recommendations && data.recommendations.length > 0) {
+        html += `
+            <div class="analysis-recommendations">
+                <h4>建议:</h4>
+                <ul>
+                    ${data.recommendations.filter(rec => rec).map(rec => `<li>${escapeHtml(rec)}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    }
+    
+    // 添加执行按钮
+    if (data.can_execute) {
+        html += `
+            <div class="analysis-actions">
+                <button class="btn btn-primary" onclick="executeGeneratedCommand('${escapeHtml(data.generated_command)}')">
+                    ▶️ 执行生成的命令
+                </button>
+                <button class="btn btn-secondary" onclick="copyToInput('${escapeHtml(data.generated_command)}')">
+                    📋 复制到输入框
+                </button>
+            </div>
+        `;
+    }
+    
+    analysisContent.innerHTML = html;
+}
+
+function displaySmartExecutionResult(data) {
+    const executionStatus = document.getElementById('execution-status');
+    const executionContent = document.getElementById('execution-content');
+    
+    const statusIcon = data.success ? '✅' : '❌';
+    const statusText = data.success ? '智能执行成功' : '智能执行失败';
+    const statusClass = data.success ? 'success' : 'error';
+    
+    executionStatus.innerHTML = `<span class="${statusClass}">${statusIcon} ${statusText}</span>`;
+    
+    let html = `
+        <div class="smart-execution-info">
+            <div class="execution-header">
+                <h4>🤖 智能执行结果</h4>
+            </div>
+            
+            <div class="info-item">
+                <span class="info-label">用户需求:</span>
+                <span class="info-value">${escapeHtml(data.query)}</span>
+            </div>
+            
+            <div class="info-item">
+                <span class="info-label">AI理解:</span>
+                <span class="info-value">${escapeHtml(data.ai_analysis)}</span>
+            </div>
+            
+            <div class="info-item">
+                <span class="info-label">生成命令:</span>
+                <span class="info-value command-display">${escapeHtml(data.generated_command)}</span>
+            </div>
+            
+            <div class="info-item">
+                <span class="info-label">命令说明:</span>
+                <span class="info-value">${escapeHtml(data.command_explanation)}</span>
+            </div>
+            
+            <div class="info-item">
+                <span class="info-label">执行类型:</span>
+                <span class="info-value">${data.execution_type === 'multi_step' ? '多步执行' : '单步执行'}</span>
+            </div>
+        </div>
+    `;
+    
+    // 显示执行结果
+    if (data.execution_type === 'multi_step' && data.steps) {
+        html += `
+            <div class="multi-step-results">
+                <h4>分步执行结果:</h4>
+                <div class="steps-summary">
+                    <span class="step-count">总步骤: ${data.steps.length}</span>
+                    <span class="success-count">成功: ${data.steps.filter(s => s.success).length}</span>
+                    <span class="failed-count">失败: ${data.steps.filter(s => !s.success).length}</span>
+                </div>
+                
+                <div class="step-results">
+                    ${data.steps.map((step, index) => `
+                        <div class="step-result ${step.success ? 'success' : 'failed'}">
+                            <div class="step-header" onclick="toggleStepDetails(${index})">
+                                <span class="step-number">步骤 ${step.step}</span>
+                                <span class="step-status">${step.success ? '✅' : '❌'}</span>
+                                <span class="step-command">${escapeHtml(step.command)}</span>
+                                <span class="toggle-icon">▼</span>
+                            </div>
+                            <div class="step-details" id="step-details-${index}" style="display: none;">
+                                ${step.success ? 
+                                    `<div class="step-output"><pre>${escapeHtml(step.output)}</pre></div>` :
+                                    `<div class="step-error"><pre>${escapeHtml(step.error)}</pre></div>`
+                                }
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    } else if (data.success && data.output) {
+        html += `
+            <div class="execution-output">
+                <h4>执行输出:</h4>
+                <div class="output-content">
+                    ${displayFormattedOutput(data.formatted_result)}
+                </div>
+            </div>
+        `;
+    }
+    
+    if (data.error) {
+        html += `
+            <div class="execution-error">
+                <h4>错误信息:</h4>
+                <div class="error-content">
+                    <pre>${escapeHtml(data.error)}</pre>
+                </div>
+            </div>
+        `;
+    }
+    
+    executionContent.innerHTML = html;
+}
+
+function executeGeneratedCommand(command) {
+    // 将生成的命令设置到输入框并执行
+    document.getElementById('shell-command-input').value = command;
+    executeShellCommand();
+}
+
+function copyToInput(command) {
+    // 将生成的命令复制到输入框
+    document.getElementById('shell-command-input').value = command;
+    showNotification('命令已复制到输入框', 'success');
+}
+
+function toggleShellMode() {
+    const shellTab = document.querySelector('.shell-tab-content');
+    const modeToggle = document.getElementById('shell-mode-toggle');
+    const inputLabel = document.querySelector('.shell-input-group label');
+    const inputPlaceholder = document.getElementById('shell-command-input');
+    const smartButtons = document.querySelector('.smart-shell-buttons');
+    const normalButtons = document.querySelector('.normal-shell-buttons');
+    const normalExamples = document.getElementById('normal-examples');
+    const smartExamples = document.getElementById('smart-examples');
+    const normalDesc = document.getElementById('mode-desc-normal');
+    const smartDesc = document.getElementById('mode-desc-smart');
+    
+    if (modeToggle.checked) {
+        // 智能模式
+        inputLabel.textContent = '描述您要执行的操作:';
+        inputPlaceholder.placeholder = '例如：帮我创建一个文件目录，并在其中写入一个名为test.txt的内容为"123"的文件';
+        smartButtons.style.display = 'flex';
+        normalButtons.style.display = 'none';
+        normalExamples.style.display = 'none';
+        smartExamples.style.display = 'grid';
+        normalDesc.classList.remove('active');
+        smartDesc.classList.add('active');
+        shellTab.classList.add('smart-mode');
+    } else {
+        // 普通模式
+        inputLabel.textContent = 'Shell命令:';
+        inputPlaceholder.placeholder = '输入要执行的shell命令，如: kubectl get pods';
+        smartButtons.style.display = 'none';
+        normalButtons.style.display = 'flex';
+        normalExamples.style.display = 'grid';
+        smartExamples.style.display = 'none';
+        normalDesc.classList.add('active');
+        smartDesc.classList.remove('active');
+        shellTab.classList.remove('smart-mode');
+    }
+} 

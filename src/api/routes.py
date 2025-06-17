@@ -181,7 +181,7 @@ class EnhancedKubectlExecutor:
         command = command.strip()
         
         # 检测命令替换语法 $(...)
-        if '$(' in command and ')' in command:
+        if '$' in command and ')' in command:
             return cls._parse_command_substitution(command)
         
         # 检测管道语法
@@ -208,7 +208,7 @@ class EnhancedKubectlExecutor:
                 "original_command": command
             }
         
-        # 检测kubectl子命令（不带kubectl前缀）
+        # 检测kubectl子命令（带kubectl前缀）
         command_parts = command.split()
         if command_parts:
             first_word = command_parts[0].lower()
@@ -592,9 +592,9 @@ class EnhancedKubectlExecutor:
     async def _execute_simple_kubectl(cls, command_info: Dict[str, Any], timeout: int) -> Dict[str, Any]:
         """执行简单kubectl命令"""
         kubectl_command = command_info["kubectl_command"]
-        full_command = f"kubectl {kubectl_command}"
         
         try:
+            full_command = f"kubectl {kubectl_command}"
             cmd_args = shlex.split(full_command)
         except ValueError as e:
             return {
@@ -610,7 +610,7 @@ class EnhancedKubectlExecutor:
             capture_output=True,
             text=True,
             timeout=timeout,
-            cwd="/data/workspace"
+            cwd=os.getcwd()
         )
         
         return {
@@ -637,7 +637,7 @@ class EnhancedKubectlExecutor:
             capture_output=True,
             text=True,
             timeout=timeout,
-            cwd="/data/workspace"
+            cwd=os.getcwd()
         )
         
         return {
@@ -664,7 +664,7 @@ class EnhancedKubectlExecutor:
             capture_output=True,
             text=True,
             timeout=timeout,
-            cwd="/data/workspace"
+            cwd=os.getcwd()
         )
         
         return {
@@ -692,7 +692,7 @@ class EnhancedKubectlExecutor:
             capture_output=True,
             text=True,
             timeout=timeout,
-            cwd="/data/workspace"
+            cwd=os.getcwd()
         )
         
         return {
@@ -728,7 +728,7 @@ class EnhancedKubectlExecutor:
                     capture_output=True,
                     text=True,
                     timeout=timeout,
-                    cwd="/data/workspace"
+                    cwd=os.getcwd()
                 )
                 
                 return {
@@ -769,7 +769,7 @@ class EnhancedKubectlExecutor:
             capture_output=True,
             text=True,
             timeout=timeout,
-            cwd="/data/workspace"
+            cwd=os.getcwd()
         )
         
         return {
@@ -1824,7 +1824,7 @@ async def test_command(command: str = Body(..., embed=True)):
 @router.post("/shell/execute")
 async def execute_shell_command(request: ShellCommandRequest):
     """
-    执行shell命令
+    执行shell命令（支持智能分析）
     
     Args:
         request: shell命令请求
@@ -1839,8 +1839,124 @@ async def execute_shell_command(request: ShellCommandRequest):
         if not command:
             raise HTTPException(status_code=400, detail="命令不能为空")
         
-        # 使用增强版执行器执行命令
-        result = await EnhancedKubectlExecutor.execute_command(command, timeout)
+        # 检查是否是自然语言查询（包含中文或明显的自然语言特征）
+        import re
+        is_natural_language = (
+            bool(re.search(r'[\u4e00-\u9fff]', command)) or  # 包含中文
+            any(word in command.lower() for word in ['帮我', '请', '创建', '生成', '写入', '如何', 'help me', 'create', 'generate']) or
+            '?' in command or '？' in command
+        )
+        
+        if is_natural_language:
+            # 这是自然语言查询，需要先通过AI分析
+            try:
+                # 获取LLM客户端
+                from ..core.llm_client import SuperKubectlAgent
+                llm_client = SuperKubectlAgent()
+                
+                # 分析自然语言查询
+                analysis_result = await llm_client.analyze_shell_query(command)
+                
+                if analysis_result.get("success"):
+                    # 检查是否有分步执行计划
+                    if analysis_result.get("execution_type") == "step_by_step" and analysis_result.get("steps"):
+                        # 分步执行模式
+                        steps = analysis_result["steps"]
+                        logger.info(f"AI分析结果: 分步执行，共{len(steps)}步")
+                        
+                        # 执行第一步
+                        first_step = steps[0]
+                        actual_command = first_step["command"]
+                        logger.info(f"执行第一步命令: {actual_command}")
+                        
+                        # 执行命令
+                        result = await EnhancedKubectlExecutor.execute_command(actual_command, timeout)
+                        
+                        # 在结果中添加AI分析信息和步骤信息
+                        result["ai_analysis"] = analysis_result.get("ai_analysis", "")
+                        result["original_query"] = command
+                        result["execution_type"] = "step_by_step"
+                        result["current_step"] = 1
+                        result["total_steps"] = len(steps)
+                        result["step_info"] = first_step
+                        result["remaining_steps"] = steps[1:] if len(steps) > 1 else []
+                        result["command_explanation"] = first_step.get("purpose", "")
+                        
+                    elif analysis_result.get("generated_command"):
+                        # 单步执行模式（向后兼容）
+                        actual_command = analysis_result["generated_command"]
+                        logger.info(f"AI分析结果: 单步执行")
+                        logger.info(f"生成的命令: {actual_command}")
+                        
+                        # 执行AI生成的命令
+                        result = await EnhancedKubectlExecutor.execute_command(actual_command, timeout)
+                        
+                        # 在结果中添加AI分析信息
+                        result["ai_analysis"] = analysis_result.get("ai_analysis", "")
+                        result["original_query"] = command
+                        result["generated_command"] = actual_command
+                        result["command_explanation"] = analysis_result.get("command_explanation", "")
+                        
+                    else:
+                        # AI分析失败，返回错误
+                        return {
+                            "success": False,
+                            "command": command,
+                            "command_type": "natural_language_query",
+                            "output": "",
+                            "error": f"AI分析失败: {analysis_result.get('ai_analysis', '未知错误')}",
+                            "return_code": -1,
+                            "formatted_result": {
+                                "type": "error",
+                                "command": command,
+                                "error": f"AI分析失败: {analysis_result.get('ai_analysis', '未知错误')}",
+                                "content": ""
+                            },
+                            "execution_time": timeout,
+                            "ai_analysis": analysis_result.get("ai_analysis", ""),
+                            "original_query": command
+                        }
+                else:
+                    # AI分析失败，返回错误
+                    return {
+                        "success": False,
+                        "command": command,
+                        "command_type": "natural_language_query",
+                        "output": "",
+                        "error": f"AI分析失败: {analysis_result.get('ai_analysis', '未知错误')}",
+                        "return_code": -1,
+                        "formatted_result": {
+                            "type": "error",
+                            "command": command,
+                            "error": f"AI分析失败: {analysis_result.get('ai_analysis', '未知错误')}",
+                            "content": ""
+                        },
+                        "execution_time": timeout,
+                        "ai_analysis": analysis_result.get("ai_analysis", ""),
+                        "original_query": command
+                    }
+                    
+            except Exception as ai_error:
+                logger.error(f"AI分析异常: {str(ai_error)}")
+                return {
+                    "success": False,
+                    "command": command,
+                    "command_type": "natural_language_query",
+                    "output": "",
+                    "error": f"AI分析异常: {str(ai_error)}",
+                    "return_code": -1,
+                    "formatted_result": {
+                        "type": "error",
+                        "command": command,
+                        "error": f"AI分析异常: {str(ai_error)}",
+                        "content": ""
+                    },
+                    "execution_time": timeout,
+                    "original_query": command
+                }
+        else:
+            # 这是普通的Shell命令，直接执行
+            result = await EnhancedKubectlExecutor.execute_command(command, timeout)
         
         # 格式化输出
         if result["success"]:
@@ -1865,7 +1981,17 @@ async def execute_shell_command(request: ShellCommandRequest):
             "error": result.get("error", ""),
             "return_code": result.get("return_code", -1),
             "formatted_result": formatted_result,
-            "execution_time": timeout
+            "execution_time": timeout,
+            "ai_analysis": result.get("ai_analysis", ""),
+            "original_query": result.get("original_query", ""),
+            "generated_command": result.get("generated_command", ""),
+            "command_explanation": result.get("command_explanation", ""),
+            # 新增分步执行相关字段
+            "execution_type": result.get("execution_type", "single"),
+            "current_step": result.get("current_step", 1),
+            "total_steps": result.get("total_steps", 1),
+            "step_info": result.get("step_info", {}),
+            "remaining_steps": result.get("remaining_steps", [])
         }
         
     except HTTPException:
@@ -2458,4 +2584,201 @@ async def get_system_status():
                     "allow_shell_commands": False
                 }
             }
+        }
+
+# 在文件末尾添加缺失的API端点
+
+@router.post("/shell/smart")
+async def execute_smart_shell_command(request: ShellCommandRequest):
+    """
+    智能Shell命令执行 - 专门用于前端智能执行按钮
+    
+    Args:
+        request: shell命令请求
+        
+    Returns:
+        Dict: 执行结果
+    """
+    try:
+        command = request.command.strip()
+        timeout = request.timeout or 30
+        
+        if not command:
+            raise HTTPException(status_code=400, detail="命令不能为空")
+        
+        # 获取LLM客户端进行智能分析
+        from ..core.llm_client import SuperKubectlAgent
+        llm_client = SuperKubectlAgent()
+        
+        # 分析自然语言查询
+        analysis_result = await llm_client.analyze_shell_query(command)
+        
+        if analysis_result.get("success"):
+            # 检查是否有分步执行计划
+            if analysis_result.get("execution_type") == "step_by_step" and analysis_result.get("steps"):
+                # 分步执行模式
+                steps = analysis_result["steps"]
+                logger.info(f"智能执行: 分步执行，共{len(steps)}步")
+                
+                # 执行第一步
+                first_step = steps[0]
+                actual_command = first_step["command"]
+                logger.info(f"执行第一步命令: {actual_command}")
+                
+                # 执行命令
+                result = await EnhancedKubectlExecutor.execute_command(actual_command, timeout)
+                
+                # 在结果中添加AI分析信息和步骤信息
+                result["ai_analysis"] = analysis_result.get("ai_analysis", "")
+                result["original_query"] = command
+                result["execution_type"] = "step_by_step"
+                result["current_step"] = 1
+                result["total_steps"] = len(steps)
+                result["step_info"] = first_step
+                result["remaining_steps"] = steps[1:] if len(steps) > 1 else []
+                result["command_explanation"] = first_step.get("purpose", "")
+                
+                return result
+                
+            elif analysis_result.get("generated_command"):
+                # 单步执行模式（向后兼容）
+                actual_command = analysis_result["generated_command"]
+                logger.info(f"智能执行: 单步执行")
+                logger.info(f"生成的命令: {actual_command}")
+                
+                # 执行AI生成的命令
+                result = await EnhancedKubectlExecutor.execute_command(actual_command, timeout)
+                
+                # 在结果中添加AI分析信息
+                result["ai_analysis"] = analysis_result.get("ai_analysis", "")
+                result["original_query"] = command
+                result["generated_command"] = actual_command
+                result["command_explanation"] = analysis_result.get("command_explanation", "")
+                
+                return result
+                
+            else:
+                # AI分析失败，返回错误
+                return {
+                    "success": False,
+                    "command": command,
+                    "command_type": "natural_language_query",
+                    "output": "",
+                    "error": f"AI分析失败: {analysis_result.get('ai_analysis', '未知错误')}",
+                    "return_code": -1,
+                    "formatted_result": {
+                        "type": "error",
+                        "command": command,
+                        "error": f"AI分析失败: {analysis_result.get('ai_analysis', '未知错误')}",
+                        "content": ""
+                    },
+                    "execution_time": timeout,
+                    "ai_analysis": analysis_result.get("ai_analysis", ""),
+                    "original_query": command
+                }
+        else:
+            # AI分析失败，返回错误
+            return {
+                "success": False,
+                "command": command,
+                "command_type": "natural_language_query",
+                "output": "",
+                "error": f"AI分析失败: {analysis_result.get('ai_analysis', '未知错误')}",
+                "return_code": -1,
+                "formatted_result": {
+                    "type": "error",
+                    "command": command,
+                    "error": f"AI分析失败: {analysis_result.get('ai_analysis', '未知错误')}",
+                    "content": ""
+                },
+                "execution_time": timeout,
+                "ai_analysis": analysis_result.get("ai_analysis", ""),
+                "original_query": command
+            }
+                
+    except Exception as e:
+        logger.error(f"智能Shell命令执行失败: {str(e)}")
+        return {
+            "success": False,
+            "command": command,
+            "command_type": "smart_execution",
+            "output": "",
+            "error": f"智能执行失败: {str(e)}",
+            "return_code": -1,
+            "formatted_result": {
+                "type": "error",
+                "command": command,
+                "error": f"智能执行失败: {str(e)}",
+                "content": ""
+            },
+            "execution_time": timeout,
+            "original_query": command
+        }
+
+@router.post("/shell/analyze")
+async def analyze_shell_query_endpoint(request: ShellCommandRequest):
+    """
+    Shell查询分析 - 专门用于前端分析按钮
+    
+    Args:
+        request: shell命令请求
+        
+    Returns:
+        Dict: 分析结果
+    """
+    try:
+        command = request.command.strip()
+        
+        if not command:
+            raise HTTPException(status_code=400, detail="命令不能为空")
+        
+        # 获取LLM客户端进行智能分析
+        from ..core.llm_client import SuperKubectlAgent
+        llm_client = SuperKubectlAgent()
+        
+        # 分析自然语言查询
+        analysis_result = await llm_client.analyze_shell_query(command)
+        
+        if analysis_result.get("success"):
+            # 格式化分析结果以适配前端显示
+            formatted_result = {
+                "success": True,
+                "query": command,
+                "ai_analysis": analysis_result.get("ai_analysis", ""),
+                "execution_type": analysis_result.get("execution_type", "single_step"),
+                "can_execute": analysis_result.get("can_execute", True),
+                "safety_check": analysis_result.get("safety_check", {"is_safe": True, "warning": ""}),
+                "recommendations": analysis_result.get("recommendations", [])
+            }
+            
+            # 根据执行类型添加相应信息
+            if analysis_result.get("execution_type") == "step_by_step":
+                formatted_result["total_steps"] = analysis_result.get("total_steps", 0)
+                formatted_result["steps"] = analysis_result.get("steps", [])
+                formatted_result["execution_strategy"] = analysis_result.get("execution_strategy", "sequential")
+            else:
+                # 单步执行模式
+                formatted_result["generated_command"] = analysis_result.get("generated_command", "")
+                formatted_result["command_explanation"] = analysis_result.get("command_explanation", "")
+            
+            return formatted_result
+        else:
+            return {
+                "success": False,
+                "query": command,
+                "error": analysis_result.get("ai_analysis", "分析失败"),
+                "ai_analysis": analysis_result.get("ai_analysis", ""),
+                "can_execute": False,
+                "safety_check": {"is_safe": False, "warning": "分析失败"}
+            }
+                
+    except Exception as e:
+        logger.error(f"Shell查询分析失败: {str(e)}")
+        return {
+            "success": False,
+            "query": command,
+            "error": f"分析失败: {str(e)}",
+            "ai_analysis": f"分析异常: {str(e)}",
+            "can_execute": False,
+            "safety_check": {"is_safe": False, "warning": "分析异常"}
         }

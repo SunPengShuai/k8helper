@@ -9,7 +9,6 @@ NC='\033[0m'
 
 # 获取参数
 PORT=${1:-8080}
-ENV_FILE=${2:-.env}
 
 # 输出信息函数
 info() { echo -e "${BLUE}[信息]${NC} $1"; }
@@ -50,25 +49,20 @@ if [ -n "$port_check" ]; then
     done
 fi
 
-# 检查环境变量文件
-if [ ! -f "$ENV_FILE" ]; then
-    warn "找不到环境变量文件：$ENV_FILE"
-    read -p "是否创建默认的环境变量文件? (y/n) " -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        cat > .env << EOF
-TENCENT_SECRET_ID=your_secret_id
-TENCENT_SECRET_KEY=your_secret_key
-EOF
-        success "已创建默认环境变量文件 .env"
-    else
-        error "无法继续，缺少环境变量文件"
-        exit 1
-    fi
+# 检查配置文件
+if [ ! -f "config.yml" ]; then
+    error "找不到配置文件：config.yml"
+    info "请确保config.yml文件存在并包含正确的配置"
+    exit 1
+else
+    success "检测到config.yml配置文件"
 fi
 
-# 设置环境变量
-export $(grep -v '^#' $ENV_FILE | xargs)
+# 检查并提醒旧的.env文件
+if [ -f ".env" ]; then
+    warn "检测到旧的.env文件，配置已迁移到config.yml"
+    info "应用将使用config.yml中的配置，.env文件将被忽略"
+fi
 
 # 终止已有的应用进程
 pkill -f "uvicorn src.main:app" 2>/dev/null || true
@@ -76,6 +70,7 @@ sleep 1
 
 # 启动应用
 info "启动K8Helper，访问地址: http://localhost:$PORT"
+info "配置文件：config.yml"
 info "按 Ctrl+C 终止应用"
 echo ""
 

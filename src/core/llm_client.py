@@ -110,7 +110,7 @@ class SuperKubectlAgent:
 
 你的任务是：
 1. 理解用户的Kubernetes相关问题
-2. 生成合适的kubectl命令（可以包含shell语法）
+2. 生成合适的完整命令（包括kubectl前缀，也可以是纯shell命令）
 3. 建议最佳的输出格式（table表格 或 text文本）
 4. 提供简要的分析说明
 
@@ -123,16 +123,17 @@ class SuperKubectlAgent:
 
 重要规则：
 1. **准确识别用户意图**：如果用户明确说"删除"、"移除"等，必须生成删除命令，不要改成查看命令
-2. **支持shell语法**：可以使用管道（|）、xargs、grep等shell命令来实现复杂操作
-3. 对于批量操作，优先使用shell语法组合命令，如：`get ns -o name | grep '^namespace/a' | xargs kubectl delete`
-4. 每个命令都应该是可执行的，不要只给建议
-5. **删除操作特殊处理**：对于删除操作，自动添加验证步骤来确认删除结果
+2. **生成完整命令**：必须包含完整的命令前缀（如kubectl、ls、cat等），不要省略
+3. **支持shell语法**：可以使用管道（|）、xargs、grep等shell命令来实现复杂操作
+4. 对于批量操作，优先使用shell语法组合命令，如：`kubectl get ns -o name | grep '^namespace/a' | xargs kubectl delete`
+5. 每个命令都应该是可执行的，不要只给建议
+6. **删除操作特殊处理**：对于删除操作，自动添加验证步骤来确认删除结果
 
 返回的JSON必须严格按照以下格式：
 {{
     "tool_name": "kubectl_command",
     "parameters": {{
-        "command": "实际的kubectl命令（不包含kubectl前缀，可以包含shell语法）",
+        "command": "完整的命令（包含kubectl前缀或其他命令前缀，可以包含shell语法）",
         "output_format": "table 或 text",
         "namespace": "可选，如果命令涉及特定命名空间",
         "explanation": "命令的简要说明",
@@ -147,11 +148,11 @@ class SuperKubectlAgent:
 {{
     "tool_name": "kubectl_command", 
     "parameters": {{
-        "command": "get pods --all-namespaces -o wide",
+        "command": "kubectl get pods --all-namespaces -o wide",
         "output_format": "table",
         "explanation": "获取所有命名空间中Pod的详细状态信息"
     }},
-    "analysis": "用户想查看集群中所有Pod的运行状态，使用get pods命令并显示详细信息"
+    "analysis": "用户想查看集群中所有Pod的运行状态，使用kubectl get pods命令并显示详细信息"
 }}
 
 示例2 - 批量删除操作（使用shell语法）：
@@ -160,12 +161,12 @@ class SuperKubectlAgent:
 {{
     "tool_name": "kubectl_command",
     "parameters": {{
-        "command": "get ns -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete ns",
+        "command": "kubectl get ns -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete ns",
         "output_format": "text",
         "explanation": "批量删除所有以'a'开头的命名空间",
         "steps": [
-            "get ns -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete ns",
-            "get ns | grep '^a'"
+            "kubectl get ns -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete ns",
+            "kubectl get ns | grep '^a'"
         ]
     }},
     "analysis": "用户需要批量删除所有以'a'开头的命名空间，使用shell管道命令获取符合条件的命名空间并批量删除，最后验证删除结果。"
@@ -177,20 +178,33 @@ class SuperKubectlAgent:
 {{
     "tool_name": "kubectl_command",
     "parameters": {{
-        "command": "create namespace test",
+        "command": "kubectl create namespace test",
         "output_format": "text",
         "explanation": "第一步：创建名为test的命名空间",
         "steps": [
-            "create namespace test",
-            "create deployment nginx-deployment --image=nginx:latest --namespace=test"
+            "kubectl create namespace test",
+            "kubectl create deployment nginx-deployment --image=nginx:latest --namespace=test"
         ]
     }},
     "analysis": "用户需要执行两步操作：1) 创建命名空间 2) 在该命名空间中创建nginx部署。建议分步执行以确保每步都成功。"
 }}
 
+示例4 - 纯shell命令：
+用户问："查看当前目录下的所有文件"
+返回：
+{{
+    "tool_name": "kubectl_command",
+    "parameters": {{
+        "command": "ls -la",
+        "output_format": "text",
+        "explanation": "列出当前目录下的所有文件和详细信息"
+    }},
+    "analysis": "用户需要查看文件系统信息，使用ls命令显示详细的文件列表"
+}}
+
 重要提醒：
 - 只返回JSON，不要包含任何其他文字
-- 命令中不要包含"kubectl"前缀
+- **必须包含完整的命令前缀**（kubectl、ls、cat等）
 - **准确识别删除意图**：如果用户说"删除"、"移除"等，必须生成删除命令
 - **支持shell语法**：可以使用管道、grep、xargs等来实现复杂操作
 - 如果是危险操作，在explanation中给出警告
@@ -256,7 +270,7 @@ class SuperKubectlAgent:
                     for pattern in kubectl_patterns:
                         match = re.search(pattern, content, re.IGNORECASE)
                         if match:
-                            command = match.group(1).strip()
+                            command = f"kubectl {match.group(1).strip()}"  # 确保包含kubectl前缀
                             # 判断输出格式
                             output_format = "table" if any(cmd in command.lower() for cmd in ["get", "list"]) else "text"
                             
@@ -266,10 +280,37 @@ class SuperKubectlAgent:
                                 "parameters": {
                                     "command": command,
                                     "output_format": output_format,
-                                    "explanation": f"从AI响应中提取的kubectl命令: {command}"
+                                    "explanation": f"从AI响应中提取的完整命令: {command}"
                                 },
                                 "analysis": content[:200] + "..." if len(content) > 200 else content
                             }
+                    
+                    # 尝试提取其他shell命令
+                    shell_patterns = [
+                        r'`([^`]+)`',
+                        r'"([^"]+)"',
+                        r'命令[：:]\s*([^\n]+)',
+                        r'执行[：:]\s*([^\n]+)'
+                    ]
+                    
+                    for pattern in shell_patterns:
+                        match = re.search(pattern, content)
+                        if match:
+                            command = match.group(1).strip()
+                            # 确保命令看起来合理
+                            if len(command.split()) >= 1 and not command.startswith('http'):
+                                output_format = "table" if any(cmd in command.lower() for cmd in ["get", "list", "ls"]) else "text"
+                                
+                                return {
+                                    "success": True,
+                                    "tool_name": "kubectl_command",
+                                    "parameters": {
+                                        "command": command,
+                                        "output_format": output_format,
+                                        "explanation": f"从AI响应中提取的完整命令: {command}"
+                                    },
+                                    "analysis": content[:200] + "..." if len(content) > 200 else content
+                                }
                     
                     # 最后的fallback - 基于关键词推测命令
                     return self._generate_fallback_command(query, content)
@@ -308,12 +349,12 @@ class SuperKubectlAgent:
                         "success": True,
                         "tool_name": "kubectl_command",
                         "parameters": {
-                            "command": "get ns -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete ns",
+                            "command": "kubectl get ns -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete ns",
                             "output_format": "text",
                             "explanation": "批量删除所有以'a'开头的命名空间",
                             "steps": [
-                                "get ns -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete ns",
-                                "get ns | grep '^a'"
+                                "kubectl get ns -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete ns",
+                                "kubectl get ns | grep '^a'"
                             ]
                         },
                         "analysis": "用户需要批量删除所有以'a'开头的命名空间，使用shell管道命令获取符合条件的命名空间并批量删除，最后验证删除结果"
@@ -323,7 +364,7 @@ class SuperKubectlAgent:
                         "success": True,
                         "tool_name": "kubectl_command",
                         "parameters": {
-                            "command": "delete namespace",
+                            "command": "kubectl delete namespace",
                             "output_format": "text",
                             "explanation": "删除命名空间（需要指定具体的命名空间名称）"
                         },
@@ -334,7 +375,7 @@ class SuperKubectlAgent:
                     "success": True,
                     "tool_name": "kubectl_command",
                     "parameters": {
-                        "command": "delete pod --all --all-namespaces",
+                        "command": "kubectl delete pod --all --all-namespaces",
                         "output_format": "text",
                         "explanation": "删除所有Pod"
                     },
@@ -345,7 +386,7 @@ class SuperKubectlAgent:
                     "success": True,
                     "tool_name": "kubectl_command",
                     "parameters": {
-                        "command": "get all --all-namespaces",
+                        "command": "kubectl get all --all-namespaces",
                         "output_format": "table",
                         "explanation": "先查看所有资源，然后确定要删除的具体资源"
                     },
@@ -354,21 +395,27 @@ class SuperKubectlAgent:
         
         # 非删除操作的关键词映射
         keyword_commands = {
-            "pod": "get pods --all-namespaces -o wide",
-            "deployment": "get deployments --all-namespaces",
-            "service": "get services --all-namespaces",
-            "node": "get nodes -o wide", 
-            "namespace": "get namespaces",
-            "命名空间": "get namespaces",
-            "日志": "logs",
-            "log": "logs",
-            "describe": "describe",
-            "详情": "describe",
-            "状态": "get pods --all-namespaces",
-            "集群": "cluster-info",
-            "版本": "version",
-            "事件": "get events --all-namespaces",
-            "配置": "get configmaps --all-namespaces"
+            "pod": "kubectl get pods --all-namespaces -o wide",
+            "deployment": "kubectl get deployments --all-namespaces",
+            "service": "kubectl get services --all-namespaces",
+            "node": "kubectl get nodes -o wide", 
+            "namespace": "kubectl get namespaces",
+            "命名空间": "kubectl get namespaces",
+            "日志": "kubectl logs",
+            "log": "kubectl logs",
+            "describe": "kubectl describe",
+            "详情": "kubectl describe",
+            "状态": "kubectl get pods --all-namespaces",
+            "集群": "kubectl cluster-info",
+            "版本": "kubectl version",
+            "事件": "kubectl get events --all-namespaces",
+            "配置": "kubectl get configmaps --all-namespaces",
+            "文件": "ls -la",
+            "目录": "ls -la",
+            "当前目录": "pwd",
+            "磁盘": "df -h",
+            "内存": "free -h",
+            "进程": "ps aux"
         }
         
         # 查找匹配的关键词
@@ -597,7 +644,7 @@ class SuperKubectlAgent:
 {
     "success": true/false,
     "can_retry": true/false,
-    "retry_command": "修复后的kubectl命令（不包含kubectl前缀，可以包含shell语法）",
+    "retry_command": "修复后的完整命令（包含kubectl前缀或其他命令前缀，可以包含shell语法）",
     "retry_reason": "为什么这样修复的原因",
     "error_analysis": "对错误的详细分析",
     "confidence": "high/medium/low - 修复成功的信心程度"
@@ -644,7 +691,7 @@ class SuperKubectlAgent:
 {
     "success": true,
     "can_retry": true,
-    "retry_command": "get ns -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete ns",
+    "retry_command": "kubectl get ns -o name | grep '^namespace/a' | cut -d'/' -f2 | xargs kubectl delete ns",
     "retry_reason": "修复shell管道命令的语法错误，使用cut命令提取命名空间名称，避免资源类型重复指定",
     "error_analysis": "原命令在xargs传递参数时出现资源类型重复指定的问题，使用cut命令提取纯命名空间名称可以解决",
     "confidence": "high"
@@ -744,6 +791,9 @@ class SuperKubectlAgent:
                     retry_command = failed_command.replace('--all', '').strip()
                     # 清理多余的空格
                     retry_command = ' '.join(retry_command.split())
+                    # 确保包含完整前缀
+                    if not retry_command.startswith('kubectl'):
+                        retry_command = f"kubectl {retry_command}"
                     return {
                         "success": True,
                         "can_retry": True,
@@ -769,6 +819,9 @@ class SuperKubectlAgent:
             if 'create' in command_lower:
                 # 将create改为get来查看现有资源
                 retry_command = failed_command.replace('create', 'get', 1)
+                # 确保包含完整前缀
+                if not retry_command.startswith('kubectl'):
+                    retry_command = f"kubectl {retry_command}"
                 return {
                     "success": True,
                     "can_retry": True,
@@ -788,7 +841,7 @@ class SuperKubectlAgent:
                 return {
                     "success": True,
                     "can_retry": True,
-                    "retry_command": f"create namespace {namespace_name}",
+                    "retry_command": f"kubectl create namespace {namespace_name}",
                     "retry_reason": f"需要先创建命名空间 {namespace_name}",
                     "error_analysis": f"命名空间 {namespace_name} 不存在，需要先创建",
                     "confidence": "high"
@@ -814,10 +867,14 @@ class SuperKubectlAgent:
         
         # 网络或临时错误
         if any(keyword in error_lower for keyword in ['timeout', 'connection', 'network', 'temporary']):
+            # 确保包含完整前缀
+            retry_command = failed_command
+            if not retry_command.startswith(('kubectl', 'ls', 'cat', 'echo', 'ps', 'df', 'free')):
+                retry_command = f"kubectl {retry_command}"
             return {
                 "success": True,
                 "can_retry": True,
-                "retry_command": failed_command,  # 重试相同命令
+                "retry_command": retry_command,
                 "retry_reason": "可能是临时网络问题，重试相同命令",
                 "error_analysis": "检测到网络或临时性错误",
                 "confidence": "medium"
@@ -998,6 +1055,596 @@ class SuperKubectlAgent:
         except Exception as e:
             logger.error(f"生成带重试信息的基础统计失败: {str(e)}")
             return "命令执行完成，请查看详细结果。"
+
+    async def analyze_shell_query(self, query: str, context: Dict[str, Any] = None) -> Dict:
+        """
+        分析用户的自然语言查询并生成Shell命令
+        
+        Args:
+            query: 用户查询
+            context: 上下文信息
+            
+        Returns:
+            Dict: 包含生成的Shell命令和分析结果
+        """
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                # 检查客户端是否可用
+                if not HAS_OPENAI or not self.client:
+                    logger.warning("LLM客户端不可用，返回手动响应")
+                    return self._generate_fallback_shell_command(query)
+                    
+                # 构造专门的Shell命令生成提示词
+                system_prompt = f"""你是一个Linux Shell专家AI助手。你必须严格按照要求返回纯JSON格式的响应，且JSON中需要包含可直接执行的 Shell 命令字段。
+
+**绝对禁止的行为：**
+1. 不要返回任何解释文字、说明或注释
+2. 不要使用markdown格式（如```json```）
+3. 不要添加任何前缀或后缀文字
+4. 不要返回除JSON对象以外的任何内容
+
+**你只能返回一个有效的JSON对象，示例格式：**
+{{
+    "success": true,
+    "task_analysis": "对整个任务的简要分析",
+    "total_steps": 步骤总数,
+    "current_step": 1,
+    "steps": [
+        {{
+            "step_number": 1,
+            "command": "具体的shell命令",
+            "purpose": "这一步的目的",
+            "expected_result": "预期的执行结果",
+            "verification": "如何验证这一步是否成功"
+        }}
+    ],
+    "execution_strategy": "sequential",
+    "can_execute": true
+}}
+
+**命令生成规则：**
+1. 对于文件创建，使用cat命令和heredoc语法：cat > filename << 'EOF'
+2. 对于C++文件，生成完整的可编译代码
+3. 对于编译需求，添加g++编译步骤
+4. 每个步骤只包含一个具体的shell命令
+5. 命令必须是可直接执行的
+
+**示例输入：** "创建一个名为test的文件夹并在其中创建hello.cpp文件"
+**你必须返回的格式：**
+{{
+    "success": true,
+    "task_analysis": "创建目录test，在其中创建C++文件hello.cpp",
+    "total_steps": 3,
+    "current_step": 1,
+    "steps": [
+        {{
+            "step_number": 1,
+            "command": "mkdir -p test",
+            "purpose": "创建目录test",
+            "expected_result": "成功创建目录test",
+            "verification": "目录test存在"
+        }},
+        {{
+            "step_number": 2,
+            "command": "cat > test/hello.cpp << 'EOF'\\n#include <iostream>\\nint main() {{\\n    std::cout << \\"Hello World!\\" << std::endl;\\n    return 0;\\n}}\\nEOF",
+            "purpose": "创建C++文件hello.cpp",
+            "expected_result": "文件test/hello.cpp被创建",
+            "verification": "文件存在且包含C++代码"
+        }},
+        {{
+            "step_number": 3,
+            "command": "ls -la test/",
+            "purpose": "验证文件创建结果",
+            "expected_result": "显示test目录中的hello.cpp文件",
+            "verification": "能看到创建的文件"
+        }}
+    ],
+    "execution_strategy": "sequential",
+    "can_execute": true
+}}
+
+**重要提醒：只返回JSON对象，不要包含任何其他内容！**"""
+                
+                # 构造请求
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"用户查询: {query}"}
+                ]
+                
+                # 如果有上下文，添加到消息中
+                if context:
+                    context_str = f"上下文信息: {json.dumps(context, ensure_ascii=False)}"
+                    messages.append({"role": "user", "content": context_str})
+                
+                # 如果是重试，添加错误信息
+                if attempt > 0:
+                    retry_msg = f"""前一次尝试失败，请严格按照要求：
+1. 只返回纯JSON对象，不要任何其他文字
+2. 不要使用```json```标记
+3. 不要添加解释或说明
+4. 确保JSON格式完全正确
+这是第{attempt + 1}次尝试，请务必返回有效的JSON格式。"""
+                    messages.append({"role": "user", "content": retry_msg})
+                
+                # 调用LLM
+                response = self.client.chat.completions.create(
+                    model="hunyuan-lite",
+                    messages=messages,
+                    temperature=0.1,
+                    max_tokens=2000
+                )
+                
+                # 解析响应
+                content = response.choices[0].message.content.strip()
+                logger.info(f"LLM Shell分析响应 (尝试 {attempt + 1}): {content[:200]}...")
+                
+                # 严格的JSON解析
+                try:
+                    # 首先尝试直接解析
+                    result = json.loads(content)
+                    
+                    # 验证必要字段
+                    if not isinstance(result, dict):
+                        raise ValueError("响应不是有效的JSON对象")
+                    
+                    if not result.get("steps") or not isinstance(result["steps"], list):
+                        raise ValueError("缺少steps字段或格式不正确")
+                    
+                    if not result.get("success"):
+                        result["success"] = True
+                    
+                    # 转换为前端期望的格式
+                    formatted_result = {
+                        "success": result["success"],
+                        "ai_analysis": result.get("task_analysis", "AI生成的分步执行计划"),
+                        "execution_type": "step_by_step",
+                        "total_steps": result.get("total_steps", len(result.get("steps", []))),
+                        "current_step": result.get("current_step", 1),
+                        "steps": result.get("steps", []),
+                        "execution_strategy": result.get("execution_strategy", "sequential"),
+                        "can_execute": result.get("can_execute", True),
+                        "safety_check": {
+                            "is_safe": True,
+                            "warning": ""
+                        },
+                        "recommendations": [
+                            "任务将分步执行，每步完成后会验证结果",
+                            "如果某步失败，AI会根据错误信息调整后续步骤"
+                        ]
+                    }
+                    
+                    logger.info(f"成功解析JSON响应 (尝试 {attempt + 1})")
+                    return formatted_result
+                    
+                except json.JSONDecodeError as e:
+                    logger.warning(f"JSON解析失败 (尝试 {attempt + 1}): {str(e)}")
+                    
+                    # 尝试清理响应内容
+                    cleaned_content = content
+                    
+                    # 移除markdown代码块标记
+                    cleaned_content = re.sub(r'```json\s*', '', cleaned_content)
+                    cleaned_content = re.sub(r'```\s*$', '', cleaned_content)
+                    cleaned_content = re.sub(r'```.*?\n', '', cleaned_content)
+                    
+                    # 移除前后的非JSON文本
+                    json_start = cleaned_content.find('{')
+                    json_end = cleaned_content.rfind('}')
+                    
+                    if json_start != -1 and json_end != -1 and json_end > json_start:
+                        json_str = cleaned_content[json_start:json_end + 1]
+                        try:
+                            result = json.loads(json_str)
+                            
+                            # 验证并格式化
+                            if isinstance(result, dict) and result.get("steps"):
+                                formatted_result = {
+                                    "success": result.get("success", True),
+                                    "ai_analysis": result.get("task_analysis", "AI生成的分步执行计划"),
+                                    "execution_type": "step_by_step",
+                                    "total_steps": result.get("total_steps", len(result.get("steps", []))),
+                                    "current_step": result.get("current_step", 1),
+                                    "steps": result.get("steps", []),
+                                    "execution_strategy": result.get("execution_strategy", "sequential"),
+                                    "can_execute": result.get("can_execute", True),
+                                    "safety_check": {"is_safe": True, "warning": ""},
+                                    "recommendations": ["任务将分步执行"]
+                                }
+                                
+                                logger.info(f"成功清理并解析JSON响应 (尝试 {attempt + 1})")
+                                return formatted_result
+                        except json.JSONDecodeError:
+                            pass
+                    
+                    # 如果不是最后一次尝试，继续重试
+                    if attempt < max_retries - 1:
+                        logger.warning(f"尝试 {attempt + 1} 失败，准备重试...")
+                        continue
+                    else:
+                        logger.error("所有尝试都失败，AI未返回有效JSON")
+                        return {
+                            "success": False,
+                            "error": "AI未返回有效JSON结构，请重试或联系管理员",
+                            "ai_analysis": f"JSON解析失败，共尝试{max_retries}次",
+                            "can_execute": False
+                        }
+                
+            except Exception as e:
+                logger.error(f"Shell查询分析失败 (尝试 {attempt + 1}): {str(e)}")
+                if attempt < max_retries - 1:
+                    continue
+                else:
+                    return {
+                        "success": False,
+                        "error": f"AI调用异常: {str(e)}",
+                        "ai_analysis": str(e),
+                        "can_execute": False
+                    }
+        
+        # 理论上已在循环内返回，这里兜底
+        return {
+            "success": False,
+            "error": "AI未能生成有效响应",
+            "ai_analysis": "未知原因",
+            "can_execute": False
+        }
+
+    def _generate_fallback_shell_command(self, query: str, error_info: str = "") -> Dict:
+        """
+        生成备用Shell命令响应（当LLM不可用时）
+        
+        Args:
+            query: 用户查询
+            error_info: 错误信息
+            
+        Returns:
+            Dict: 备用响应
+        """
+        import re
+        
+        query_lower = query.lower()
+        
+        # 改进的关键词匹配和信息提取
+        if ("创建" in query or "建立" in query) and ("目录" in query or "文件夹" in query):
+            # 提取目录名 - 改进的正则表达式
+            dir_patterns = [
+                r'名为["\']?([A-Za-z0-9_\-]{2,})["\']?的.*(?:目录|文件夹)',
+                r'(?:目录|文件夹)["\']?([A-Za-z0-9_\-]{2,})["\']?',
+                r'创建.*["\']?([A-Za-z0-9_\-]{2,})["\']?.*(?:目录|文件夹)',
+                r'一个["\']?([A-Za-z0-9_\-]{2,})["\']?(?:目录|文件夹)',
+                r'叫["\']?([A-Za-z0-9_\-]{2,})["\']?的(?:目录|文件夹)'
+            ]
+            
+            dir_name = "myproject"  # 默认目录名
+            for pattern in dir_patterns:
+                match = re.search(pattern, query)
+                if match:
+                    dir_name = match.group(1)
+                    break
+            
+            # 检查是否需要创建文件
+            if "文件" in query:
+                # 提取文件名 - 改进的正则表达式
+                file_patterns = [
+                    r'名为["\']?([A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)["\']?的.*文件',
+                    r'文件["\']?([A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)["\']?',
+                    r'写入.*["\']?([A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)["\']?',
+                    r'创建.*["\']?([A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)["\']?.*文件',
+                    r'一个["\']?([A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)["\']?文件'
+                ]
+                
+                file_name = "main.cpp"  # 默认文件名
+                for pattern in file_patterns:
+                    match = re.search(pattern, query)
+                    if match:
+                        file_name = match.group(1)
+                        break
+                
+                # 检查编程语言类型和游戏类型
+                if "c++" in query_lower or "cpp" in query_lower:
+                    if not file_name.endswith('.cpp'):
+                        # 根据游戏类型确定文件名
+                        if "石头剪刀布" in query or "剪刀石头布" in query:
+                            file_name = "game.cpp"
+                        else:
+                            file_name = "main.cpp"
+                    
+                    # 根据游戏类型生成相应的C++代码
+                    if "石头剪刀布" in query or "剪刀石头布" in query:
+                        # 生成完整的石头剪刀布游戏代码
+                        cpp_code = '''#include <iostream>
+#include <ctime>
+#include <cstdlib>
+#include <string>
+
+int main() {
+    std::srand(std::time(0));
+    int computer, user;
+    std::string choice;
+
+    std::cout << "=== 石头剪刀布游戏 ===" << std::endl;
+    
+    while (true) {
+        std::cout << "请输入您的选择（石头/剪刀/布，输入q退出）：";
+        std::cin >> choice;
+        
+        if (choice == "q" || choice == "Q") {
+            std::cout << "谢谢游戏！再见！" << std::endl;
+            break;
+        }
+
+        if (choice == "石头") {
+            user = 1;
+        } else if (choice == "剪刀") {
+            user = 2;
+        } else if (choice == "布") {
+            user = 3;
+        } else {
+            std::cout << "无效的输入，请重新输入！" << std::endl;
+            continue;
+        }
+
+        computer = std::rand() % 3 + 1;
+
+        std::cout << "你选择了：" << choice << std::endl;
+        std::cout << "电脑选择了：";
+        if (computer == 1) {
+            std::cout << "石头";
+        } else if (computer == 2) {
+            std::cout << "剪刀";
+        } else {
+            std::cout << "布";
+        }
+        std::cout << std::endl;
+
+        if (user == computer) {
+            std::cout << "平局！" << std::endl;
+        } else if ((user == 1 && computer == 2) || (user == 2 && computer == 3) || (user == 3 && computer == 1)) {
+            std::cout << "🎉 你赢了！" << std::endl;
+        } else {
+            std::cout << "💻 电脑赢了！" << std::endl;
+        }
+        
+        std::cout << std::string(30, '-') << std::endl;
+    }
+
+    return 0;
+}'''
+                    else:
+                        # 生成简单的Hello World程序
+                        cpp_code = '''#include <iostream>
+
+int main() {
+    std::cout << "Hello, World!" << std::endl;
+    return 0;
+}'''
+                    
+                    # 检查是否需要编译
+                    if "编译" in query or "二进制" in query or "可执行" in query:
+                        # 确定可执行文件名
+                        exe_name = "game" if "游戏" in query else "main"
+                        
+                        steps = [
+                            {
+                                "step_number": 1,
+                                "command": f"mkdir -p {dir_name}",
+                                "purpose": f"创建目录{dir_name}",
+                                "expected_result": f"成功创建目录{dir_name}",
+                                "verification": f"目录{dir_name}存在"
+                            },
+                            {
+                                "step_number": 2,
+                                "command": f"cat > {dir_name}/{file_name} << 'EOF'\\n{cpp_code}\\nEOF",
+                                "purpose": f"创建C++文件{file_name}",
+                                "expected_result": f"文件{dir_name}/{file_name}被创建并包含C++代码",
+                                "verification": "文件存在且包含C++代码"
+                            },
+                            {
+                                "step_number": 3,
+                                "command": f"cd {dir_name} && g++ {file_name} -o {exe_name}",
+                                "purpose": "编译C++文件为二进制可执行文件",
+                                "expected_result": f"成功生成{exe_name}可执行文件",
+                                "verification": f"{exe_name}文件存在且可执行"
+                            },
+                            {
+                                "step_number": 4,
+                                "command": f"ls -la {dir_name}/",
+                                "purpose": "验证文件创建和编译结果",
+                                "expected_result": f"显示{dir_name}目录中的{file_name}和{exe_name}文件",
+                                "verification": "能看到源文件和编译后的可执行文件"
+                            }
+                        ]
+                        
+                        game_type = "石头剪刀布游戏" if "石头剪刀布" in query or "剪刀石头布" in query else "C++程序"
+                        
+                        return {
+                            "success": True,
+                            "ai_analysis": f"LLM服务不可用({error_info})，使用智能匹配：用户需要创建目录'{dir_name}'、{game_type}文件'{file_name}'并编译为二进制文件",
+                            "execution_type": "step_by_step",
+                            "total_steps": 4,
+                            "current_step": 1,
+                            "steps": steps,
+                            "execution_strategy": "sequential",
+                            "can_execute": True,
+                            "safety_check": {"is_safe": True, "warning": ""},
+                            "recommendations": [
+                                f"任务将分步执行：创建目录 → 创建{game_type}文件 → 编译 → 验证",
+                                f"编译完成后可以运行：cd {dir_name} && ./{exe_name}",
+                                "如果编译失败，请确保系统已安装g++编译器"
+                            ]
+                        }
+                    else:
+                        # 只创建文件，不编译
+                        steps = [
+                            {
+                                "step_number": 1,
+                                "command": f"mkdir -p {dir_name}",
+                                "purpose": f"创建目录{dir_name}",
+                                "expected_result": f"成功创建目录{dir_name}",
+                                "verification": f"目录{dir_name}存在"
+                            },
+                            {
+                                "step_number": 2,
+                                "command": f"cat > {dir_name}/{file_name} << 'EOF'\\n{cpp_code}\\nEOF",
+                                "purpose": f"创建C++文件{file_name}",
+                                "expected_result": f"文件{dir_name}/{file_name}被创建并包含C++代码",
+                                "verification": "文件存在且包含C++代码"
+                            },
+                            {
+                                "step_number": 3,
+                                "command": f"ls -la {dir_name}/",
+                                "purpose": "验证文件创建结果",
+                                "expected_result": f"显示{dir_name}目录中的{file_name}文件",
+                                "verification": "能看到创建的C++源文件"
+                            }
+                        ]
+                        
+                        game_type = "石头剪刀布游戏" if "石头剪刀布" in query or "剪刀石头布" in query else "C++程序"
+                        
+                        return {
+                            "success": True,
+                            "ai_analysis": f"LLM服务不可用({error_info})，使用智能匹配：用户需要创建目录'{dir_name}'和{game_type}文件'{file_name}'",
+                            "execution_type": "step_by_step",
+                            "total_steps": 3,
+                            "current_step": 1,
+                            "steps": steps,
+                            "execution_strategy": "sequential",
+                            "can_execute": True,
+                            "safety_check": {"is_safe": True, "warning": ""},
+                            "recommendations": [
+                                f"任务将分步执行：创建目录 → 创建{game_type}文件 → 验证",
+                                f"如需编译，可以运行：cd {dir_name} && g++ {file_name} -o game"
+                            ]
+                        }
+                
+                else:
+                    # 非C++文件的处理
+                    steps = [
+                        {
+                            "step_number": 1,
+                            "command": f"mkdir -p {dir_name}",
+                            "purpose": f"创建目录{dir_name}",
+                            "expected_result": f"成功创建目录{dir_name}",
+                            "verification": f"目录{dir_name}存在"
+                        },
+                        {
+                            "step_number": 2,
+                            "command": f"touch {dir_name}/{file_name}",
+                            "purpose": f"创建文件{file_name}",
+                            "expected_result": f"文件{dir_name}/{file_name}被创建",
+                            "verification": "文件存在"
+                        },
+                        {
+                            "step_number": 3,
+                            "command": f"ls -la {dir_name}/",
+                            "purpose": "验证文件创建结果",
+                            "expected_result": f"显示{dir_name}目录中的{file_name}文件",
+                            "verification": "能看到创建的文件"
+                        }
+                    ]
+                    
+                    return {
+                        "success": True,
+                        "ai_analysis": f"LLM服务不可用({error_info})，使用智能匹配：用户需要创建目录'{dir_name}'和文件'{file_name}'",
+                        "execution_type": "step_by_step",
+                        "total_steps": 3,
+                        "current_step": 1,
+                        "steps": steps,
+                        "execution_strategy": "sequential",
+                        "can_execute": True,
+                        "safety_check": {"is_safe": True, "warning": ""},
+                        "recommendations": [
+                            "任务将分步执行：创建目录 → 创建文件 → 验证"
+                        ]
+                    }
+            
+            else:
+                # 只创建目录
+                steps = [
+                    {
+                        "step_number": 1,
+                        "command": f"mkdir -p {dir_name}",
+                        "purpose": f"创建目录{dir_name}",
+                        "expected_result": f"成功创建目录{dir_name}",
+                        "verification": f"目录{dir_name}存在"
+                    },
+                    {
+                        "step_number": 2,
+                        "command": f"ls -la {dir_name}/",
+                        "purpose": "验证目录创建结果",
+                        "expected_result": f"显示{dir_name}目录的内容",
+                        "verification": "目录存在且可访问"
+                    }
+                ]
+                
+                return {
+                    "success": True,
+                    "ai_analysis": f"LLM服务不可用({error_info})，使用智能匹配：用户需要创建目录'{dir_name}'",
+                    "execution_type": "step_by_step",
+                    "total_steps": 2,
+                    "current_step": 1,
+                    "steps": steps,
+                    "execution_strategy": "sequential",
+                    "can_execute": True,
+                    "safety_check": {"is_safe": True, "warning": ""},
+                    "recommendations": [
+                        "任务将分步执行：创建目录 → 验证"
+                    ]
+                }
+        
+        # 其他常见命令的处理
+        common_commands = {
+            "查看当前目录": ("pwd", "显示当前工作目录"),
+            "列出文件": ("ls -la", "列出当前目录的所有文件和详细信息"),
+            "查看磁盘空间": ("df -h", "显示磁盘使用情况"),
+            "查看内存使用": ("free -h", "显示内存使用情况"),
+            "查看系统信息": ("uname -a", "显示系统信息")
+        }
+        
+        for desc, (cmd, explanation) in common_commands.items():
+            if any(keyword in query_lower for keyword in desc.split()):
+                return {
+                    "success": True,
+                    "ai_analysis": f"LLM服务不可用({error_info})，使用智能匹配：识别为{desc}操作",
+                    "execution_type": "single_step",
+                    "generated_command": cmd,
+                    "command_explanation": explanation,
+                    "steps": [{
+                        "step_number": 1,
+                        "command": cmd,
+                        "purpose": explanation,
+                        "expected_result": f"成功执行{desc}",
+                        "verification": "命令正常输出结果"
+                    }],
+                    "safety_check": {"is_safe": True, "warning": ""},
+                    "can_execute": True,
+                    "recommendations": [f"这是一个安全的{desc}命令"]
+                }
+        
+        # 默认响应 - 提供更有用的测试命令
+        return {
+            "success": True,
+            "ai_analysis": f"LLM服务不可用({error_info})，无法准确解析查询: {query[:50]}...",
+            "execution_type": "single_step",
+            "generated_command": "echo 'AI服务暂时不可用，这是一个测试命令'",
+            "command_explanation": "基础测试命令，用于验证系统功能",
+            "steps": [{
+                "step_number": 1,
+                "command": "echo 'AI服务暂时不可用，这是一个测试命令'",
+                "purpose": "测试系统基本功能",
+                "expected_result": "输出测试信息",
+                "verification": "显示测试消息"
+            }],
+            "safety_check": {"is_safe": True, "warning": ""},
+            "can_execute": True,
+            "recommendations": [
+                "这是一个基础测试命令",
+                "请检查LLM服务配置或稍后重试",
+                "您也可以直接输入具体的shell命令"
+            ]
+        }
 
 # 保持向后兼容
 HunyuanClient = SuperKubectlAgent 

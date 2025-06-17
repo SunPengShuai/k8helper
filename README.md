@@ -4,11 +4,13 @@ K8Helper是一个基于AI的Kubernetes集群管理助手，它使用自然语言
 
 ## 功能特点
 
-- 自然语言交互：使用自然语言描述Kubernetes操作，无需记忆复杂命令
-- 智能命令识别：自动将自然语言转换为适当的kubectl命令
-- 美观的结果展示：以表格、分段和格式化的方式展示命令输出结果
-- 支持多种查询类型：Pod状态、服务列表、部署详情等
-- Web界面和API双接口：同时提供API调用和Web界面两种使用方式
+- **自然语言交互**：使用自然语言描述Kubernetes操作，无需记忆复杂命令
+- **智能命令识别**：自动将自然语言转换为适当的kubectl命令
+- **安全管理系统**：超级管理员模式、Shell命令安全控制、自定义安全策略
+- **系统配置管理**：AI模型配置、重试策略、性能参数调优
+- **美观的结果展示**：以表格、分段和格式化的方式展示命令输出结果
+- **多功能界面**：AI助手、Shell命令、安全设置、系统配置四大功能模块
+- **Web界面和API双接口**：同时提供API调用和Web界面两种使用方式
 
 ## 快速开始
 
@@ -31,14 +33,46 @@ cd k8helper
 pip install -r requirements.txt
 ```
 
-3. 配置环境变量：
-```bash
-export TENCENT_SECRET_ID="your_secret_id"
-export TENCENT_SECRET_KEY="your_secret_key"
+3. 配置应用：
+编辑 `config.yml` 文件，设置您的API密钥和其他配置：
+
+```yaml
+# 腾讯云配置
+tencent:
+  secret_id: "your_tencent_secret_id"
+  secret_key: "your_tencent_secret_key"
+  region: "ap-guangzhou"
+
+# LLM配置
+llm:
+  hunyuan:
+    api_key: "your_hunyuan_api_key"
+    secret_key: "your_hunyuan_secret_key"
+  openai:
+    api_key: "your_openai_api_key"
+
+# API服务配置
+api:
+  host: "0.0.0.0"
+  port: 8080
+  reload: true
 ```
 
 ### 运行服务
 
+#### 方式一：使用启动脚本（推荐）
+```bash
+# 首次运行，设置虚拟环境
+./setup_venv.sh
+
+# 启动应用
+./start.sh
+
+# 或指定端口
+./start.sh 8081
+```
+
+#### 方式二：直接运行
 ```bash
 cd k8helper
 python -m uvicorn src.main:app --host 0.0.0.0 --port 8080
@@ -54,9 +88,8 @@ docker build -t k8helper .
 2. 运行容器：
 ```bash
 docker run -p 8080:8080 \
-  -e TENCENT_SECRET_ID=your_secret_id \
-  -e TENCENT_SECRET_KEY=your_secret_key \
   -v ~/.kube/config:/root/.kube/config:ro \
+  -v $(pwd)/config.yml:/app/config.yml:ro \
   k8helper
 ```
 
@@ -64,29 +97,43 @@ docker run -p 8080:8080 \
 
 #### Web界面使用
 
-打开浏览器访问 http://localhost:8080，在输入框中使用自然语言输入您的Kubernetes查询。
+打开浏览器访问 http://localhost:8080，您将看到四个主要功能模块：
+
+1. **🤖 AI助手**：使用自然语言查询Kubernetes资源
+2. **💻 Shell命令**：执行高级Shell命令和管道操作
+3. **🔒 安全设置**：管理超级管理员模式和安全策略
+4. **⚙️ 系统配置**：配置AI模型、重试策略、性能参数等
 
 #### API调用示例
 
-1. 查看所有Pod状态：
+1. 基础查询：
 ```bash
 curl -X POST http://localhost:8080/api/v1/query \
   -H "Content-Type: application/json" \
   -d '{"query": "如何查看Kubernetes集群中所有Pod的状态？"}'
 ```
 
-2. 查看特定命名空间的服务：
+2. 复杂查询：
 ```bash
 curl -X POST http://localhost:8080/api/v1/query \
   -H "Content-Type: application/json" \
-  -d '{"query": "查看kube-system命名空间中的服务"}'
+  -d '{"query": "查看kube-system命名空间中CPU使用率最高的Pod"}'
 ```
 
-3. 查看特定Pod详情：
+3. Shell命令执行：
 ```bash
-curl -X POST http://localhost:8080/api/v1/query \
+curl -X POST http://localhost:8080/api/v1/shell \
   -H "Content-Type: application/json" \
-  -d '{"query": "查看kube-system命名空间下名为coredns的Pod的详细信息"}'
+  -d '{"command": "kubectl get pods --all-namespaces | grep -v Running"}'
+```
+
+4. 安全配置管理：
+```bash
+# 获取当前安全配置
+curl http://localhost:8080/api/v1/security/config
+
+# 启用超级管理员模式
+curl -X POST http://localhost:8080/api/v1/security/super-admin/enable
 ```
 
 ## 项目结构
@@ -98,20 +145,76 @@ k8helper/
 │   ├── core/           # 核心业务逻辑
 │   ├── utils/          # 工具类
 │   └── tests/          # 测试用例
-├── chart/              # Helm chart定义
 ├── static/             # 静态资源文件
+│   ├── css/           # 样式文件
+│   │   ├── style.css          # 主样式文件
+│   │   └── setting_style.css  # 系统配置页面样式
+│   ├── js/            # JavaScript文件
+│   └── index.html     # 主页面
+├── chart/              # Helm chart定义
+├── config.yml          # 统一配置文件
 ├── Dockerfile          # Docker构建文件
 ├── requirements.txt    # 项目依赖
-└── README.md           # 项目文档
+├── start.sh           # 启动脚本
+├── run.sh             # 简化启动脚本
+├── setup_venv.sh      # 虚拟环境设置脚本
+└── README.md          # 项目文档
 ```
+
+## 高级功能
+
+### 智能重试机制
+当命令执行失败时，AI会自动分析错误原因并生成修复命令：
+- 自动识别权限问题、资源不存在等常见错误
+- 生成针对性的修复建议
+- 支持多步骤修复流程
+
+### 复杂Shell命令支持
+支持管道、命令替换等高级Shell语法：
+```bash
+# 批量删除失败的Pod
+kubectl get pods --all-namespaces --field-selector=status.phase=Failed -o name | xargs kubectl delete
+
+# 查找资源使用率最高的节点
+kubectl top nodes | sort -k3 -nr | head -5
+```
+
+### 安全策略管理
+- **超级管理员模式**：控制危险操作的执行权限
+- **命令白名单/黑名单**：自定义允许和禁止的命令
+- **资源操作限制**：限制可以创建、删除的资源类型
+
+### 系统配置管理
+- **AI模型切换**：支持腾讯云混元和OpenAI模型
+- **重试策略配置**：自定义最大重试次数和延迟时间
+- **性能参数调优**：超时设置、输出限制、结果缓存
 
 ## 开发指南
 
-### 运行测试
+### 本地开发
 
+1. **环境设置**：
+```bash
+# 设置虚拟环境
+./setup_venv.sh
+
+# 激活虚拟环境
+source venv/bin/activate
+```
+
+2. **运行测试**：
 ```bash
 python -m pytest src/tests/
 ```
+
+3. **启动开发服务器**：
+```bash
+./start.sh 8080
+```
+
+### 功能扩展
+
+要添加新的kubectl命令支持，请参考 `src/core/llm_client.py` 中的工具定义，并在 `src/api/routes.py` 中添加相应的处理逻辑。
 
 ### 构建Docker镜像
 
@@ -124,16 +227,89 @@ docker build -t k8helper .
 ```bash
 cd k8helper
 helm install k8helper ./chart \
-  --set secrets.tencentSecretId=your_secret_id \
-  --set secrets.tencentSecretKey=your_secret_key
+  --set-file config=config.yml
+```
+
+## 配置说明
+
+### 配置文件结构
+
+`config.yml` 文件包含以下主要配置节：
+
+- **app**: 应用基础配置（名称、版本、调试模式）
+- **api**: API服务配置（主机、端口、CORS设置）
+- **kubernetes**: Kubernetes连接配置
+- **tencent**: 腾讯云服务配置
+- **llm**: 大语言模型配置（混元、OpenAI）
+- **logging**: 日志配置
+- **security**: 安全策略配置
+- **services**: Kubernetes API服务配置
+- **tools**: MCP工具配置
+
+### 环境变量支持
+
+配置文件支持环境变量替换，格式为 `${ENV_VAR_NAME}`：
+
+```yaml
+tencent:
+  secret_id: "${TENCENT_SECRET_ID}"
+  secret_key: "${TENCENT_SECRET_KEY}"
+```
+
+## 故障排除
+
+### 常见问题
+
+1. **配置文件错误**：
+   - 确保 `config.yml` 文件存在且格式正确
+   - 检查API密钥是否正确设置
+
+2. **依赖问题**：
+   ```bash
+   # 重新安装依赖
+   pip install -r requirements.txt
+   
+   # 或安装核心依赖
+   pip install fastapi uvicorn openai tencentcloud-sdk-python-hunyuan pyyaml
+   ```
+
+3. **端口冲突**：
+   ```bash
+   # 查找占用端口的进程
+   lsof -i :8080
+   
+   # 使用其他端口启动
+   ./start.sh 8081
+   ```
+
+4. **Kubernetes连接问题**：
+   - 确保 `~/.kube/config` 文件存在且有效
+   - 检查集群连接权限
+
+### 健康检查
+
+使用健康检查API验证服务状态：
+```bash
+curl http://localhost:8080/health
+```
+
+### 日志调试
+
+查看应用日志：
+```bash
+# 查看实时日志
+tail -f logs/k8helper.log
+
+# 查看错误日志
+grep ERROR logs/k8helper.log
 ```
 
 ## 实现原理
 
 K8Helper采用MCP (Model-Controller-Plugin) 架构：
 
-- A端（MCPserver）：应用服务器，能访问Kubernetes环境并执行kubectl命令，但无分析能力
-- B端（MCPclient）：远程大模型服务，如腾讯云混元或OpenAI，具有分析能力但无法直接操作Kubernetes
+- **A端（MCPserver）**：应用服务器，能访问Kubernetes环境并执行kubectl命令，但无分析能力
+- **B端（MCPclient）**：远程大模型服务，如腾讯云混元或OpenAI，具有分析能力但无法直接操作Kubernetes
 
 工作流程：
 1. 用户向A端提交自然语言查询（如"该集群有多少Pod？"）
@@ -143,408 +319,71 @@ K8Helper采用MCP (Model-Controller-Plugin) 架构：
 
 这种架构结合了大模型的理解能力和本地执行环境的操作能力，实现了智能化的Kubernetes管理。
 
-## 扩展教程
+## 部署最佳实践
 
-### 常见问题解决
+### 生产环境建议
 
-#### 依赖问题
+1. **安全配置**：
+   - 使用HTTPS保护API通信
+   - 实现API认证机制
+   - 定期更新依赖包
 
-如果遇到`ModuleNotFoundError: No module named 'tencentcloud.hunyuan'`错误，需要安装腾讯云混元大模型SDK：
-
-```bash
-pip install tencentcloud-sdk-python-hunyuan
-```
-
-如果使用OpenAI兼容接口，请确保已安装openai包：
-
-```bash
-pip install openai
-```
-
-#### 环境变量配置
-
-1. 设置临时环境变量：
-
-```bash
-export TENCENT_SECRET_ID="your_secret_id"
-export TENCENT_SECRET_KEY="your_secret_key"
-```
-
-2. 或创建.env文件（推荐）：
-
-```bash
-# 在项目根目录创建.env文件
-echo "TENCENT_SECRET_ID=your_secret_id" > .env
-echo "TENCENT_SECRET_KEY=your_secret_key" >> .env
-```
-
-#### 端口冲突
-
-如果默认端口(8080)被占用，可以更改端口：
-
-```bash
-python -m uvicorn src.main:app --host 0.0.0.0 --port 8081
-```
-
-或者查找并关闭占用端口的进程：
-
-```bash
-# 查找占用8080端口的进程
-lsof -i :8080
-# 终止进程
-kill -9 <PID>
-```
-
-### 修改LLM模型配置
-
-K8Helper默认使用腾讯云混元大模型，但也支持配置为使用OpenAI或其他兼容接口的模型：
-
-1. 在`src/core/llm_client.py`中更新模型配置：
-
-```python
-# 使用OpenAI API
-self.client = OpenAI(
-    api_key="your_openai_api_key",
-    base_url="https://api.openai.com/v1"  # OpenAI官方接口
-)
-
-# 修改请求模型名称
-completion = self.client.chat.completions.create(
-    model="gpt-3.5-turbo",  # 替换为你需要的模型
-    messages=messages
-)
-```
-
-### 健康检查和调试
-
-使用健康检查API来验证服务是否正常运行：
-
-```bash
-curl http://localhost:8080/api/v1/health
-```
-
-正常返回：`{"status":"healthy"}`
-
-### 性能优化建议
-
-1. 设置API超时和重试机制：
-
-```python
-# 在llm_client.py中设置
-self.client = OpenAI(
-    api_key=self.secret_key,
-    base_url="https://api.hunyuan.cloud.tencent.com/v1",
-    timeout=30.0,  # 设置30秒超时
-    max_retries=3  # 设置最大重试次数
-)
-```
-
-2. 启用结果缓存，对相同查询避免重复调用LLM：
-
-```python
-# 在routes.py中实现简单缓存
-query_cache = {}
-
-@router.post("/query")
-async def process_query(request: QueryRequest):
-    # 检查缓存
-    cache_key = request.query
-    if cache_key in query_cache:
-        return query_cache[cache_key]
-        
-    # 处理请求逻辑...
-    
-    # 存入缓存
-    query_cache[cache_key] = response
-    return response
-```
-
-### 部署最佳实践
-
-对于生产环境，建议：
-
-1. 使用Kubernetes进行部署，确保高可用：
+2. **高可用部署**：
    - 部署多个副本
    - 配置资源限制和请求
    - 使用ConfigMap和Secret管理配置
 
-2. 设置监控和日志：
+3. **监控和日志**：
    - 使用Prometheus监控API性能
-   - 配置structured logging便于日志分析
+   - 配置structured logging
+   - 设置告警规则
 
-3. 安全建议：
-   - 使用HTTPS保护API通信
-   - 实现API认证机制
-   - 定期更新依赖包以修复安全漏洞
-   
-### 快速启动脚本
+### Kubernetes部署示例
 
-项目提供了几个便捷的脚本，用于简化环境设置和应用启动流程：
-
-#### 虚拟环境设置
-
-使用`setup_venv.sh`脚本快速创建和配置Python虚拟环境：
-
-```bash
-# 赋予执行权限
-chmod +x setup_venv.sh
-
-# 运行脚本
-./setup_venv.sh
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8helper
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: k8helper
+  template:
+    metadata:
+      labels:
+        app: k8helper
+    spec:
+      containers:
+      - name: k8helper
+        image: k8helper:latest
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: config
+          mountPath: /app/config.yml
+          subPath: config.yml
+        - name: kubeconfig
+          mountPath: /root/.kube/config
+          subPath: config
+      volumes:
+      - name: config
+        configMap:
+          name: k8helper-config
+      - name: kubeconfig
+        secret:
+          secretName: kubeconfig
 ```
 
-此脚本会自动：
-- 创建Python虚拟环境
-- 安装所有必要的依赖
-- 创建默认的.env文件（如果不存在）
+## 支持与反馈
 
-#### 应用启动
+如果您在使用过程中遇到问题或有改进建议，请通过以下方式联系我们：
 
-有两种方式可以启动应用：
+- 提交Issue：[GitHub Issues](https://github.com/yourusername/k8helper/issues)
+- 功能请求：[GitHub Discussions](https://github.com/yourusername/k8helper/discussions)
+- 邮件支持：support@k8helper.com
 
-1. 使用`start.sh`脚本（完整版，包含环境检查）：
+## 许可证
 
-```bash
-# 赋予执行权限
-chmod +x start.sh
-
-# 使用默认端口(8080)启动
-./start.sh
-
-# 指定端口启动
-./start.sh 8081
-```
-
-2. 使用`run.sh`脚本（简化版，假设环境已设置）：
-
-```bash
-# 赋予执行权限
-chmod +x run.sh
-
-# 使用默认端口启动
-./run.sh
-
-# 指定端口和环境变量文件
-./run.sh 8081 custom.env
-```
-
-这些脚本会自动处理：
-- 检查和激活虚拟环境
-- 设置必要的环境变量
-- 处理端口冲突
-- 终止已存在的实例
-- 启动应用服务
-
-#### 开发流程示例
-
-```bash
-# 1. 初次设置（只需运行一次）
-./setup_venv.sh
-
-# 2. 日常开发启动
-./run.sh
-
-# 3. 测试API
-curl -X POST http://localhost:8080/api/v1/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "如何查看所有Pod的状态？"}'
-```
-
-## 工具能力扩展指南
-
-K8Helper的核心功能是将自然语言转换为Kubernetes命令。如果您想扩展系统的能力，可以通过以下步骤添加新的工具和命令：
-
-### 添加新的kubectl命令工具
-
-1. 在`src/core/llm_client.py`文件中扩展`available_tools`列表：
-
-```python
-# 在HunyuanClient类的__init__方法中找到available_tools列表
-self.available_tools = [
-    # 现有工具...
-    
-    # 添加新工具示例
-    {
-        "name": "kubectl_get_configmaps",
-        "description": "获取ConfigMap资源列表",
-        "parameters": {
-            "namespace": "可选，指定要查询的命名空间，不指定则查询所有命名空间",
-            "output_format": "可选，输出格式，如wide、json、yaml等"
-        }
-    }
-]
-```
-
-2. 在`src/api/routes.py`文件中的`execute_tool`函数中添加对应的处理逻辑：
-
-```python
-async def execute_tool(tool_name: str, parameters: Dict[str, Any]) -> str:
-    """执行工具命令"""
-    try:
-        # 现有工具处理逻辑...
-        
-        # 添加新工具处理逻辑
-        elif tool_name == "kubectl_get_configmaps":
-            namespace = parameters.get("namespace", "")
-            output_format = parameters.get("output_format", "")
-            
-            # 构建命令
-            cmd = ["kubectl", "get", "configmaps"]
-            if namespace:
-                cmd.extend(["-n", namespace])
-            else:
-                cmd.append("--all-namespaces")
-            if output_format:
-                cmd.extend(["-o", output_format])
-                
-            # 执行命令
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode != 0:
-                return f"命令执行失败: {result.stderr}"
-            return result.stdout
-```
-
-3. 为新命令添加格式化输出支持（可选）：
-
-在`format_output`函数中添加相应的格式化逻辑，使输出更美观：
-
-```python
-def format_output(tool_name: str, output: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
-    """格式化输出结果"""
-    try:
-        # 现有格式化逻辑...
-        
-        # 为新工具添加格式化逻辑
-        elif tool_name == "kubectl_get_configmaps":
-            return format_table_output(output, tool_name, parameters)
-    except Exception as e:
-        logger.error(f"格式化输出失败: {str(e)}")
-        return {"type": "text", "content": output}
-```
-
-### 添加复杂的非kubectl命令工具
-
-如果您需要添加更复杂的功能（如日志分析、资源监控等），建议以下步骤：
-
-1. 在`src/core`目录下创建新的模块文件，例如`resource_monitor.py`：
-
-```python
-from typing import Dict, Any
-import subprocess
-from ..utils.logger import get_logger
-
-logger = get_logger(__name__)
-
-class ResourceMonitor:
-    """资源监控工具类"""
-    
-    @staticmethod
-    def get_node_resource_usage() -> Dict[str, Any]:
-        """获取节点资源使用情况"""
-        try:
-            # 实现逻辑
-            cmd = ["kubectl", "top", "nodes"]
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            
-            # 处理输出
-            if result.returncode != 0:
-                return {"success": False, "error": result.stderr}
-                
-            # 解析输出
-            lines = result.stdout.strip().split('\n')
-            headers = lines[0].strip().split()
-            data = []
-            
-            for i in range(1, len(lines)):
-                values = lines[i].strip().split()
-                node_data = {}
-                for j in range(min(len(headers), len(values))):
-                    node_data[headers[j]] = values[j]
-                data.append(node_data)
-                
-            return {
-                "success": True,
-                "data": data
-            }
-        except Exception as e:
-            logger.error(f"获取节点资源使用情况失败: {str(e)}")
-            return {"success": False, "error": str(e)}
-```
-
-2. 更新`llm_client.py`中的工具列表，添加新工具：
-
-```python
-{
-    "name": "resource_monitor",
-    "description": "获取集群资源使用情况，包括节点CPU和内存使用率",
-    "parameters": {}
-}
-```
-
-3. 在`routes.py`中添加对应的处理逻辑：
-
-```python
-from ..core.resource_monitor import ResourceMonitor
-
-# 在execute_tool函数中添加
-elif tool_name == "resource_monitor":
-    monitor = ResourceMonitor()
-    result = monitor.get_node_resource_usage()
-    if result["success"]:
-        return json.dumps(result["data"], ensure_ascii=False, indent=2)
-    else:
-        return f"获取资源使用情况失败: {result['error']}"
-```
-
-### 配置系统提示词
-
-如需调整系统的理解能力或响应风格，可以修改`llm_client.py`中的系统提示词：
-
-```python
-system_prompt = """你是一个Kubernetes集群管理助手。你需要分析用户的查询，并返回结构化的JSON，包含工具名称和参数。
-严格从提供的工具列表中选择一个最合适的工具，不要使用未定义的工具。
-...
-"""
-```
-
-### 集成新的LLM模型
-
-如果您想使用不同的AI模型，可以在`llm_client.py`中添加新的模型适配：
-
-```python
-class AzureOpenAIClient(HunyuanClient):
-    """Azure OpenAI模型客户端"""
-    
-    def __init__(self):
-        super().__init__()
-        self.client = OpenAI(
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            base_url=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            api_version="2023-05-15"
-        )
-        
-    async def analyze_query(self, query: str, context: Dict[str, Any] = None) -> Dict:
-        # 实现Azure OpenAI的请求逻辑
-        # ...
-```
-
-然后在`routes.py`中根据配置选择使用哪个客户端：
-
-```python
-# 根据配置选择LLM客户端
-llm_client_type = Config.LLM_CLIENT_TYPE
-if llm_client_type == "azure":
-    llm_client = AzureOpenAIClient()
-elif llm_client_type == "openai":
-    llm_client = OpenAIClient()
-else:
-    llm_client = HunyuanClient()  # 默认使用腾讯云混元
-```
-
-### 开发建议
-
-1. 遵循模块化设计原则：新功能应该独立封装在单独的模块中
-2. 保持兼容性：确保添加的功能不影响现有功能
-3. 完善错误处理：对所有可能的错误情况进行处理
-4. 添加测试用例：为新功能添加单元测试和集成测试
-5. 更新文档：在添加新功能后更新文档和注释
+本项目采用MIT许可证，详情请参阅 [LICENSE](LICENSE) 文件。

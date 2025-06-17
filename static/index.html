@@ -101,16 +101,43 @@
                         </div>
                     </div>
                     
+                    <!-- 模式切换 -->
+                    <div class="shell-mode-section">
+                        <div class="mode-toggle-container">
+                            <span class="mode-label">普通模式</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="shell-mode-toggle" onchange="toggleShellMode()">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="mode-label">🤖 智能模式</span>
+                        </div>
+                        <div class="mode-description">
+                            <span id="mode-desc-normal" class="mode-desc active">直接输入Shell命令执行</span>
+                            <span id="mode-desc-smart" class="mode-desc">用自然语言描述操作，AI自动生成并执行Shell命令</span>
+                        </div>
+                    </div>
+                    
                     <!-- 命令输入区域 -->
                     <div class="shell-input-section">
                         <div class="shell-form">
-                            <div class="shell-input-container">
+                            <div class="shell-input-group">
+                                <label for="shell-command-input">Shell命令:</label>
                                 <textarea id="shell-command-input" class="shell-command-input" 
                                          placeholder="输入shell命令，例如：&#10;kubectl get pods&#10;kubectl get namespaces | grep '^a'&#10;kubectl delete namespaces $(kubectl get namespaces -o jsonpath=&quot;{.items[*].metadata.name}&quot; | grep '^a')&#10;kubectl get nodes && kubectl get pods --all-namespaces"
                                          rows="3"></textarea>
-                                <div class="shell-input-actions">
+                            </div>
+                            
+                            <div class="shell-actions">
+                                <!-- 普通模式按钮 -->
+                                <div class="normal-shell-buttons">
                                     <button id="validate-shell-btn" class="validate-btn">🔍 验证命令</button>
                                     <button id="execute-shell-btn" class="execute-btn">▶️ 执行命令</button>
+                                </div>
+                                
+                                <!-- 智能模式按钮 -->
+                                <div class="smart-shell-buttons" style="display: none;">
+                                    <button id="analyze-shell-btn" class="analyze-btn" onclick="analyzeShellQuery()">🤖 AI分析</button>
+                                    <button id="smart-execute-shell-btn" class="smart-execute-btn" onclick="executeSmartShellCommand()">🚀 智能执行</button>
                                 </div>
                             </div>
                             
@@ -130,8 +157,8 @@
                     
                     <!-- 命令示例 -->
                     <div class="shell-examples">
-                        <h3>📚 命令示例</h3>
-                        <div class="example-grid">
+                        <h3 id="examples-title">📚 命令示例</h3>
+                        <div class="example-grid" id="normal-examples">
                             <div class="shell-example-card" onclick="setShellCommand('kubectl get pods')">
                                 <div class="example-title">基础kubectl命令</div>
                                 <div class="example-code">kubectl get pods</div>
@@ -157,6 +184,42 @@
                                 <div class="example-code">kubectl get pods -o wide | grep Running</div>
                             </div>
                         </div>
+                        
+                        <!-- 智能模式示例 -->
+                        <div class="example-grid" id="smart-examples" style="display: none;">
+                            <div class="shell-example-card" onclick="setShellCommand('帮我创建一个文件目录，并在其中写入一个名为test.txt的内容为123的文件')">
+                                <div class="example-title">文件操作</div>
+                                <div class="example-code">帮我创建一个文件目录，并在其中写入一个名为test.txt的内容为"123"的文件</div>
+                            </div>
+                            <div class="shell-example-card" onclick="setShellCommand('查看占用内存最多的前5个进程')">
+                                <div class="example-title">系统监控</div>
+                                <div class="example-code">查看占用内存最多的前5个进程</div>
+                            </div>
+                            <div class="shell-example-card" onclick="setShellCommand('查找当前目录下所有.log文件并统计行数')">
+                                <div class="example-title">文件搜索</div>
+                                <div class="example-code">查找当前目录下所有.log文件并统计行数</div>
+                            </div>
+                            <div class="shell-example-card" onclick="setShellCommand('备份当前目录到backup文件夹')">
+                                <div class="example-title">文件备份</div>
+                                <div class="example-code">备份当前目录到backup文件夹</div>
+                            </div>
+                            <div class="shell-example-card" onclick="setShellCommand('清理7天前的临时文件')">
+                                <div class="example-title">系统清理</div>
+                                <div class="example-code">清理7天前的临时文件</div>
+                            </div>
+                            <div class="shell-example-card" onclick="setShellCommand('检查网络连接状态')">
+                                <div class="example-title">网络诊断</div>
+                                <div class="example-code">检查网络连接状态</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- AI分析结果 -->
+                    <div id="shell-analysis-result" class="shell-analysis-result" style="display: none;">
+                        <div class="analysis-header">
+                            <h3>🤖 AI分析结果</h3>
+                        </div>
+                        <div id="analysis-content" class="analysis-content"></div>
                     </div>
                     
                     <!-- 验证结果 -->
@@ -520,7 +583,7 @@
 
     <!-- 隐藏的文件输入，用于配置导入 -->
     <input type="file" id="config-file-input" accept=".json" style="display: none;">
-
+    
     <script src="/static/js/app.js"></script>
 </body>
 </html> 

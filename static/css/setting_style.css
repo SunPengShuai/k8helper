@@ -1027,4 +1027,454 @@
         font-size: 12px;
         padding: 6px;
     }
+}
+
+/* 智能Shell模式样式 */
+.shell-mode-section {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.mode-toggle-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.mode-label {
+    font-weight: 500;
+    color: var(--text-color);
+    font-size: 14px;
+}
+
+.mode-description {
+    text-align: center;
+    margin-top: 10px;
+}
+
+.mode-desc {
+    display: none;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-style: italic;
+}
+
+.mode-desc.active {
+    display: inline;
+}
+
+/* 智能模式激活状态 */
+.shell-tab-content.smart-mode .shell-input-group label {
+    color: var(--primary-color);
+}
+
+.shell-tab-content.smart-mode .shell-command-input {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.1);
+}
+
+.shell-tab-content.smart-mode #examples-title::before {
+    content: "🤖 ";
+}
+
+/* 智能按钮样式 */
+.smart-shell-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.analyze-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.analyze-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.analyze-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.smart-execute-btn {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.smart-execute-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(240, 147, 251, 0.3);
+}
+
+.smart-execute-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* AI分析结果样式 */
+.shell-analysis-result {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-top: 20px;
+    overflow: hidden;
+}
+
+.analysis-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 15px 20px;
+    margin: 0;
+}
+
+.analysis-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.analysis-content {
+    padding: 20px;
+}
+
+.smart-analysis-summary {
+    background: var(--bg-color);
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.analysis-header h4 {
+    margin: 0 0 15px 0;
+    color: var(--primary-color);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.analysis-item {
+    display: flex;
+    margin-bottom: 10px;
+    align-items: flex-start;
+}
+
+.analysis-label {
+    font-weight: 500;
+    color: var(--text-secondary);
+    min-width: 80px;
+    font-size: 13px;
+}
+
+.analysis-value {
+    flex: 1;
+    color: var(--text-color);
+    font-size: 13px;
+    word-break: break-word;
+}
+
+.analysis-value.command-preview {
+    background: var(--code-bg);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    border-left: 3px solid var(--primary-color);
+}
+
+.analysis-value.safe {
+    color: var(--success-color);
+}
+
+.analysis-value.unsafe {
+    color: var(--error-color);
+}
+
+.analysis-steps {
+    margin-top: 15px;
+}
+
+.analysis-steps h4 {
+    margin: 0 0 10px 0;
+    color: var(--text-color);
+    font-size: 14px;
+}
+
+.step-list {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.step-item {
+    margin-bottom: 8px;
+}
+
+.step-item code {
+    background: var(--code-bg);
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    color: var(--text-color);
+}
+
+.analysis-recommendations {
+    margin-top: 15px;
+    padding: 12px;
+    background: rgba(255, 193, 7, 0.1);
+    border-left: 3px solid #ffc107;
+    border-radius: 4px;
+}
+
+.analysis-recommendations h4 {
+    margin: 0 0 8px 0;
+    color: #ffc107;
+    font-size: 13px;
+}
+
+.analysis-recommendations ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.analysis-recommendations li {
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.analysis-actions {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.analysis-actions .btn {
+    padding: 8px 16px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.analysis-actions .btn-primary {
+    background: var(--primary-color);
+    color: white;
+}
+
+.analysis-actions .btn-primary:hover {
+    background: var(--primary-hover);
+}
+
+.analysis-actions .btn-secondary {
+    background: var(--secondary-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+.analysis-actions .btn-secondary:hover {
+    background: var(--hover-color);
+}
+
+/* 智能执行结果样式 */
+.smart-execution-info {
+    background: var(--bg-color);
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.execution-header h4 {
+    margin: 0 0 15px 0;
+    color: var(--success-color);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.command-display {
+    background: var(--code-bg);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    border-left: 3px solid var(--success-color);
+}
+
+.multi-step-results {
+    margin-top: 15px;
+}
+
+.multi-step-results h4 {
+    margin: 0 0 10px 0;
+    color: var(--text-color);
+    font-size: 14px;
+}
+
+.steps-summary {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: var(--bg-color);
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.step-count {
+    color: var(--text-secondary);
+}
+
+.success-count {
+    color: var(--success-color);
+    font-weight: 500;
+}
+
+.failed-count {
+    color: var(--error-color);
+    font-weight: 500;
+}
+
+.step-results {
+    space-y: 8px;
+}
+
+.step-result {
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+
+.step-result.success {
+    border-left: 3px solid var(--success-color);
+}
+
+.step-result.failed {
+    border-left: 3px solid var(--error-color);
+}
+
+.step-header {
+    padding: 10px 15px;
+    background: var(--bg-color);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    transition: background-color 0.2s ease;
+}
+
+.step-header:hover {
+    background: var(--hover-color);
+}
+
+.step-number {
+    font-weight: 500;
+    color: var(--text-secondary);
+    min-width: 60px;
+}
+
+.step-status {
+    font-size: 14px;
+}
+
+.step-command {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: var(--text-color);
+}
+
+.toggle-icon {
+    color: var(--text-secondary);
+    transition: transform 0.2s ease;
+}
+
+.step-header.expanded .toggle-icon {
+    transform: rotate(180deg);
+}
+
+.step-details {
+    padding: 15px;
+    background: var(--card-bg);
+    border-top: 1px solid var(--border-color);
+}
+
+.step-output pre,
+.step-error pre {
+    margin: 0;
+    padding: 10px;
+    background: var(--code-bg);
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-x: auto;
+}
+
+.step-error pre {
+    color: var(--error-color);
+    background: rgba(220, 53, 69, 0.1);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .mode-toggle-container {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .smart-shell-buttons,
+    .analysis-actions {
+        flex-direction: column;
+    }
+    
+    .smart-shell-buttons button,
+    .analysis-actions .btn {
+        width: 100%;
+    }
+    
+    .steps-summary {
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    .step-header {
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+    
+    .step-command {
+        width: 100%;
+        margin-top: 5px;
+    }
 } 
