@@ -14,8 +14,5 @@ api:
 
 # 密钥配置
 secrets:
-  tencentSecretId: ""
-  tencentSecretKey: ""
   hunyuanApiKey: ""
-  hunyuanSecretKey: ""
   kubeConfig: "" 
