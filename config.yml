@@ -24,9 +24,9 @@ kubernetes:
 # LLM配置 https://console.cloud.tencent.com/hunyuan/api-key 获取api_key
 llm:
   hunyuan:
-    api_key: "sk-aKKx6Qee16fJWZSy6rD8H5blDKeaKIJV76j9SyTBePoxT2Y1"
+    api_key: ""
   openai:
-    api_key: "sk-aKKx6Qee16fJWZSy6rD8H5blDKeaKIJV76j9SyTBePoxT2Y1"
+    api_key: ""
 
 # 日志配置
 logging:
