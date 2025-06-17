@@ -23,17 +23,17 @@ kubernetes:
 
 # 腾讯云配置
 tencent:
-  secret_id: "AKIDv8RdeT5TdbMuEKDsJWWGm48zc1DCyYu2"
-  secret_key: "0mKm12pPluqZ4MceT4RbYGk04vYyBBxa"
+  secret_id: ""
+  secret_key: ""
   region: "ap-guangzhou"
 
 # LLM配置
 llm:
   hunyuan:
-    api_key: "sk-aKKx6Qee16fJWZSy6rD8H5blDKeaKIJV76j9SyTBePoxT2Y1"
+    api_key: ""
     secret_key: ""
   openai:
-    api_key: "sk-aKKx6Qee16fJWZSy6rD8H5blDKeaKIJV76j9SyTBePoxT2Y1"
+    api_key: ""
 
 # 日志配置
 logging:
